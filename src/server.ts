@@ -1,9 +1,24 @@
 import { config } from "dotenv";
 import app from "./app.js";
+import { env } from "./config/env.js";
 config();
 
-const PORT = process.env.PORT || 5000;
+const PORT = env.app.PORT || 3000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
+});
+
+server.on("error", (err: any) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`❌ Port ${PORT} already in use. Trying next port...`);
+    setTimeout(() => {
+      server.close();
+      app.listen(PORT + 1, () => {
+        console.log(`✅ Server running on http://localhost:${PORT + 1}`);
+      });
+    }, 1000);
+  } else {
+    console.error(err);
+  }
 });

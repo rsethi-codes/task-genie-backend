@@ -17,8 +17,8 @@ const dbSchema = z.object({
 });
 
 const authSchema = z.object({
-  JWT_SECRET: z.string().min(1, "JWT_SECRET is required").optional(),
-  API_KEY: z.string().optional(),
+  CLERK_PUBLISHABLE_KEY: z.string().min(1, "CLERK_PUBLISHABLE_KEY is required"),
+  CLERK_SECRET_KEY: z.string().min(1, "CLERK_SECRET_KEY is required"),
 });
 
 // 🧠 Combine all schemas
@@ -41,8 +41,8 @@ const parseEnv = () => {
         MONGO_URI: process.env.MONGO_URI,
       },
       auth: {
-        JWT_SECRET: process.env.JWT_SECRET,
-        API_KEY: process.env.API_KEY,
+        CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY,
+        CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
       },
     };
 

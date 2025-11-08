@@ -9,7 +9,7 @@ const server = app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
 });
 
-server.on("error", (err: any) => {
+server.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {
     console.error(`❌ Port ${PORT} already in use. Trying next port...`);
     setTimeout(() => {

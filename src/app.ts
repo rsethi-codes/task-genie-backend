@@ -2,8 +2,8 @@ import express from "express";
 import cors from "cors";
 import { connectDB } from "./config/db.js";
 import { clerkMiddleware } from "@clerk/express";
-import { authRoutes } from "./routes/auth.route.js";
-import { AUTH_BASE } from "./constants/routes.constants.js";
+import { userRoutes } from "./routes/user.route.js";
+import { USER_BASE } from "./constants/routes.constants.js";
 // import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
@@ -30,8 +30,7 @@ app.use((req, res, next) => {
 });
 
 // ROUTES
-// app.use(USER_BASE, userRoutes);
-app.use(AUTH_BASE, authRoutes);
+app.use(USER_BASE, userRoutes);
 
 // 404 handler
 app.use((req, res) => {

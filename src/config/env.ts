@@ -13,7 +13,8 @@ const appSchema = z.object({
 });
 
 const dbSchema = z.object({
-  MONGO_URI: z.string().min(1, "MONGO_URI is required"),
+  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  REDIS_URL: z.string().min(1, "REDIS_URL is required"),
 });
 
 const authSchema = z.object({
@@ -38,7 +39,8 @@ const parseEnv = () => {
         PORT: process.env.PORT,
       },
       db: {
-        MONGO_URI: process.env.MONGO_URI,
+        DATABASE_URL: process.env.DATABASE_URL,
+        REDIS_URL: process.env.REDIS_URL,
       },
       auth: {
         CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY,

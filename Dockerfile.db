@@ -1,0 +1,14 @@
+# PostgreSQL 16 image with pgvector extension
+FROM pgvector/pgvector:pg16
+
+# Set default environment variables
+ENV POSTGRES_DB=taskgenie
+ENV POSTGRES_USER=genie
+ENV POSTGRES_PASSWORD=genie_pass
+
+# Expose the default PostgreSQL port
+EXPOSE 5432
+
+# Healthcheck to ensure database is ready
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
+    CMD pg_isready -U $POSTGRES_USER -d $POSTGRES_DB

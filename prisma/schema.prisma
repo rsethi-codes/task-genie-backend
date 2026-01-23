@@ -1,0 +1,977 @@
+// Enhanced Prisma schema for AI-Driven Task Management
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+// ============================================================================
+// ENUMS - Expanded for better type safety
+// ============================================================================
+
+enum UserRole {
+  USER
+  ADMIN
+  OWNER
+}
+
+enum TaskStatus {
+  DRAFT     // Idea, not yet committed
+  ACTIVE    // Planned for execution
+  BLOCKED   // Waiting on external factor
+  COMPLETED // Done
+  ARCHIVED  // Won't do / historical
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum Visibility {
+  private
+  team
+  public
+}
+
+enum Channel {
+  push
+  email
+  sms
+  webhook
+}
+
+enum SubtaskStatus {
+  pending
+  in_progress
+  completed
+  skipped
+  blocked
+  failed
+}
+
+enum QuestionType {
+  text
+  single_choice
+  multiple_choice
+  number
+  date
+  time
+  duration
+  scale
+  boolean
+}
+
+enum SessionStatus {
+  open
+  completed
+  abandoned
+  interrupted
+}
+
+enum AttemptOutcome {
+  completed
+  paused
+  abandoned
+  failed
+  interrupted
+}
+
+enum TaskEventType {
+  CREATED
+  STATUS_CHANGE
+  CONTENT_EDIT
+  AI_SYNC
+  DELETED
+  RESTORED
+}
+
+enum EventSource {
+  UI
+  AI_AGENT
+  SYSTEM_JOB
+  EXTERNAL_API
+}
+
+enum EnergyLevel {
+  very_low
+  low
+  medium
+  high
+  very_high
+}
+
+enum FocusLevel {
+  minimal
+  light
+  moderate
+  deep
+  intense
+}
+
+enum TimeOfDay {
+  early_morning   // 5-8am
+  morning         // 8-12pm
+  afternoon       // 12-5pm
+  evening         // 5-9pm
+  night           // 9pm-12am
+  late_night      // 12am-5am
+}
+
+enum DayOfWeek {
+  monday
+  tuesday
+  wednesday
+  thursday
+  friday
+  saturday
+  sunday
+}
+
+// ============================================================================
+// CORE USER & PROFILE
+// ============================================================================
+
+model User {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clerkId     String     @unique // Clerk integration
+  email       String     @unique
+  displayName String
+  avatarUrl   String?
+  timeZone    String     @default("UTC")
+  locale      String     @default("en-US")
+  roles       UserRole[] @default([USER])
+  
+  // System fields
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  lastSeenAt  DateTime?
+  isActive    Boolean    @default(true)
+
+  // Relations
+  profile              UserProfile?
+  tasks                Task[]
+  subtaskAttempts      SubtaskAttempt[]
+  projectsOwned        Project[]              @relation("ProjectOwner")
+  projectsMemberOf     ProjectMember[]
+  comments             Comment[]
+  reminders            Reminder[]
+  auditLogs            AuditLog[]
+  questionSessions     QuestionSession[]
+  questionResponses    QuestionResponse[]
+  embeddings           Embedding[]
+  sharedTasks          TaskShare[]
+  aiModelConfigs       AIModelConfig[]
+  feedback             TaskFeedback[]
+  webhooks             IntegrationWebhook[]
+  refinementSessions   RefinementSession[]
+  taskPatterns         TaskPattern[]
+  behaviorPatterns     BehaviorPattern[]
+  schedulePreferences  SchedulePreference[]
+  currentPersonaVersion Int               @default(1)
+  personaSnapshots      PersonaSnapshot[]
+
+  @@index([email])
+  @@index([clerkId])
+  @@index([isActive])
+}
+
+model PersonaSnapshot {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @db.Uuid
+  version    Int
+  traits     Json
+  confidence Json
+  meta       Json
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, version])
+  @@index([userId, version(sort: Desc)])
+}
+
+// NEW: Separated user profile for better organization
+model UserProfile {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @unique @db.Uuid
+  
+  // Preferences (structured, not JSON)
+  defaultPriority     Priority     @default(MEDIUM)
+  defaultDuration     Int?         // minutes
+  workStartTime       String?      // "09:00"
+  workEndTime         String?      // "17:00"
+  preferredWorkDays   DayOfWeek[]
+  breakDuration       Int?         // minutes
+  
+  // Behavioral metadata (limited JSON for truly variable data)
+  customPreferences   Json?        // Theme, notifications, etc.
+  integrations        Json?        // Connected apps
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// NEW: AI-learned user persona (replaces preferences JSON)
+model BehaviorPattern {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @db.Uuid
+  
+  // Pattern identification
+  patternType        String          // "energy_by_time", "focus_by_day", "completion_by_priority"
+  context            Json            // Conditions when this pattern applies
+  
+  // Pattern data
+  confidence         Float           // 0-1, how reliable is this pattern
+  sampleSize         Int             // How many data points
+  lastObserved       DateTime
+  
+  // Energy patterns
+  peakEnergyTime     TimeOfDay?
+  lowEnergyTime      TimeOfDay?
+  avgEnergyLevel     Float?          // 1-5
+  
+  // Focus patterns
+  peakFocusTime      TimeOfDay?
+  avgFocusDuration   Int?            // minutes
+  bestFocusDays      DayOfWeek[]
+  
+  // Productivity patterns
+  avgTasksPerDay     Float?
+  avgCompletionRate  Float?          // 0-1
+  procrastinationTendency Float?     // 0-1
+  
+  // Timing patterns
+  planningToExecution Int?           // days between planning and doing
+  estimationAccuracy  Float?         // actual/estimated ratio
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, patternType])
+  @@index([confidence(sort: Desc)])
+}
+
+// NEW: User's schedule preferences and constraints
+model SchedulePreference {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @db.Uuid
+  
+  // Time blocking
+  dayOfWeek     DayOfWeek
+  startTime     String        // "09:00"
+  endTime       String        // "12:00"
+  blockType     String        // "work", "personal", "blocked", "flexible"
+  energyLevel   EnergyLevel?
+  focusLevel    FocusLevel?
+  
+  // Constraints
+  isRecurring   Boolean @default(true)
+  validFrom     DateTime?
+  validUntil    DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dayOfWeek])
+  @@index([userId, blockType])
+}
+
+// ============================================================================
+// TASKS - Core entity with better structure
+// ============================================================================
+
+model Task {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String     @db.Uuid
+  title       String
+  description String?
+  status      TaskStatus @default(DRAFT)
+  priority    Priority   @default(MEDIUM)
+  category    String?
+  tags        String[]
+
+  // Time management - more explicit
+  startDate         DateTime?
+  dueDate           DateTime?
+  estimatedDuration Int?            // minutes
+  actualDuration    Int?            // computed from subtask attempts
+  completedAt       DateTime?
+  
+  // Context - partially normalized
+  locationName      String?
+  locationType      String?         // "home", "office", "anywhere"
+  requiresInternet  Boolean @default(false)
+  requiresTools     String[]
+  
+  energyRequired    EnergyLevel?
+  focusRequired     FocusLevel?
+  preferredTimeOfDay TimeOfDay[]
+  
+  // AI planning results (keep as JSON - too variable to normalize)
+  aiMetadata        Json?           // complexity, reasoning, confidence
+  
+  // Progress tracking - normalized
+  hasSubtasks       Boolean @default(false)
+  subtaskCount      Int     @default(0)
+  completedSubtasks Int     @default(0)
+  progressPercent   Float   @default(0)
+  
+  // Recurrence - structured
+  isRecurring       Boolean @default(false)
+  recurrenceRule    String? // iCal RRULE format
+  recurrenceEnd     DateTime?
+  
+  // Learning metadata
+  similarityScore   Float?          // Similarity to past tasks
+  basedOnPatternId  String? @db.Uuid
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Correctness
+  idempotencyKey String?
+
+  // Relations
+  user                 User                @relation(fields: [userId], references: [id])
+  projects             ProjectTask[]
+  comments             Comment[]
+  reminders            Reminder[]
+  subtasks             Subtask[]
+  shares               TaskShare[]
+  questionnaireHistory Json[] // Array of questionnaire responses
+  dependencies         TaskDependency[] @relation("Task")
+  dependentOn          TaskDependency[] @relation("DependsOn")
+  feedback             TaskFeedback[]
+  refinementSession    RefinementSession?
+  questionSessions     QuestionSession[]
+  analytics            TaskAnalytics[]
+  events               TaskEvent[]
+  basedOnPattern       TaskPattern?        @relation("TaskFromPattern", fields: [basedOnPatternId], references: [id])
+  generatedPatterns    TaskPattern[]       @relation("PatternFromTask")
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, status])
+  @@index([userId, dueDate])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([deletedAt])
+  @@index([userId, category])
+  @@index([isRecurring])
+}
+
+// NEW: Time-series analytics for tasks (queryable, not JSON)
+model TaskAnalytics {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId String @db.Uuid
+  
+  // Snapshot at point in time
+  recordedAt           DateTime @default(now())
+  
+  // Completion metrics
+  completionRate       Float?   // 0-1
+  onTimeCompletion     Boolean?
+  daysToComplete       Int?
+  daysOverdue          Int?
+  
+  // Effort metrics
+  estimatedDuration    Int?
+  actualDuration       Int?
+  estimationAccuracy   Float?   // actual/estimated
+  
+  // Behavioral metrics
+  attemptCount         Int @default(0)
+  abandonmentCount     Int @default(0)
+  pauseCount           Int @default(0)
+  
+  // AI metrics
+  aiComplexityScore    Float?
+  aiConfidence         Float?
+  userSatisfaction     Int?     // 1-5 rating
+  
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, recordedAt(sort: Desc)])
+  @@index([recordedAt])
+}
+
+// NEW: Learned task patterns (AI learns from history)
+model TaskPattern {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @db.Uuid
+  
+  // Pattern identification
+  name              String
+  category          String?
+  keywords          String[]        // For matching
+  
+  // Pattern metrics
+  occurrenceCount   Int @default(1)
+  avgDuration       Int?            // minutes
+  avgSubtaskCount   Int?
+  successRate       Float?          // 0-1
+  
+  // Learned preferences
+  bestTimeOfDay     TimeOfDay?
+  bestDayOfWeek     DayOfWeek[]
+  requiredEnergy    EnergyLevel?
+  requiredFocus     FocusLevel?
+  
+  // Template data
+  suggestedSubtasks Json[]          // Array of subtask templates
+  suggestedSchedule Json?           // Scheduling hints
+  
+  // Pattern metadata
+  confidence        Float           // 0-1
+  lastUsed          DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasksUsingPattern Task[] @relation("TaskFromPattern")
+  sourceTask        Task?  @relation("PatternFromTask", fields: [sourceTaskId], references: [id])
+  sourceTaskId      String? @db.Uuid
+
+  @@index([userId, category])
+  @@index([userId, confidence(sort: Desc)])
+}
+
+// ============================================================================
+// SUBTASKS - First-class citizens with attempt tracking
+// ============================================================================
+
+model Subtask {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parentTaskId String        @db.Uuid
+  userId       String        @db.Uuid
+  title        String
+  description  String?
+  status       SubtaskStatus @default(pending)
+  order        Int
+  
+  // Time
+  dueDate           DateTime?
+  estimatedDuration Int?
+  actualDuration    Int?      // Computed from attempts
+  scheduledStart    DateTime?
+  scheduledEnd      DateTime?
+  completedAt       DateTime?
+  
+  // Context
+  energyRequired    EnergyLevel?
+  focusRequired     FocusLevel?
+  locationName      String?
+  requiresTools     String[]
+  
+  // Dependencies
+  blockedBy         String[]  @db.Uuid // Other subtask IDs
+  isBlocking        Boolean @default(false)
+  
+  // AI metadata
+  aiGenerated       Boolean @default(false)
+  aiSuggestions     Json?
+  aiConfidence      Float?
+  promptHash        String?   // Hash of the prompt used to generate this
+  userModified      Boolean @default(false)
+  notes             String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  parentTask Task             @relation(fields: [parentTaskId], references: [id], onDelete: Cascade)
+  attempts   SubtaskAttempt[]
+
+  @@index([parentTaskId, order])
+  @@index([userId, status])
+  @@index([scheduledStart])
+}
+
+// NEW: Normalized attempt tracking (was JSON in Subtask)
+model SubtaskAttempt {
+  id         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subtaskId  String          @db.Uuid
+  userId     String          @db.Uuid
+  
+  // Attempt details
+  attemptNumber   Int
+  outcome         AttemptOutcome
+  
+  // Timing
+  startedAt       DateTime
+  endedAt         DateTime?
+  duration        Int?              // minutes
+  pauseDuration   Int?              // minutes paused
+  
+  // Context at time of attempt
+  energyLevel     EnergyLevel?
+  focusLevel      FocusLevel?
+  location        String?
+  timeOfDay       TimeOfDay?
+  dayOfWeek       DayOfWeek?
+  
+  // Behavioral data
+  distractionCount Int @default(0)
+  toolsSwitched    Int @default(0)
+  notes            String?
+  
+  createdAt DateTime @default(now())
+
+  subtask Subtask @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([subtaskId, attemptNumber])
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([outcome])
+}
+
+// ============================================================================
+// QUESTION SESSIONS - Enhanced for behavioral analysis
+// ============================================================================
+
+model QuestionSession {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String        @db.Uuid
+  taskId        String?       @db.Uuid
+  modelConfigId String?       @db.Uuid
+  
+  status        SessionStatus @default(open)
+  ephemeral     Boolean       @default(false)
+  
+  // Session metadata
+  totalQuestions    Int @default(0)
+  answeredQuestions Int @default(0)
+  skippedQuestions  Int @default(0)
+  
+  // Behavioral metrics (your insight!)
+  avgResponseTime   Float?        // seconds
+  totalSessionTime  Int?          // seconds
+  hesitationCount   Int @default(0)
+  revisedAnswers    Int @default(0)
+  
+  // AI decision
+  decision          Json?         // Final AI plan
+  decisionConfidence Float?
+  
+  // Onboarding specific
+  exitReason        String?       // "completed", "skip", "timeout", "irrelevant"
+  initialPersona    Boolean       @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+
+  // Relations
+  user      User               @relation(fields: [userId], references: [id])
+  task      Task?              @relation(fields: [taskId], references: [id])
+  responses QuestionResponse[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+// NEW: Individual question responses (was JSON array)
+model QuestionResponse {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId String   @db.Uuid
+  userId    String   @db.Uuid
+  
+  // Question details
+  questionId    String?  @db.Uuid  // Reference to Questionnaire if from template
+  questionText  String
+  questionType  QuestionType
+  
+  // Response
+  answer        Json              // Actual answer value
+  answerText    String?           // Human-readable version
+  confidence    Int?              // 1-5 how confident user was
+  
+  // Behavioral tracking (YOUR BRILLIANT INSIGHT)
+  responseTime  Int               // Milliseconds to answer
+  hesitated     Boolean @default(false) // Took unusually long
+  revised       Boolean @default(false) // Changed answer
+  revisionCount Int @default(0)
+  thoughtTime   Int?              // Time before typing started
+  
+  // Context
+  answeredAt    DateTime
+  order         Int               // Question order in session
+  
+  session       QuestionSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user          User            @relation(fields: [userId], references: [id])
+
+  @@index([sessionId, order])
+  @@index([userId, answeredAt(sort: Desc)])
+  @@index([hesitated])
+}
+
+model Questionnaire {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category  String
+  question  String
+  type      QuestionType @default(text)
+  options   String[]
+  
+  // AI hints
+  aiHint          String?
+  aiImportance    Float @default(0.5) // 0-1
+  
+  // Conditional logic
+  conditionalOn   String? @db.Uuid    // Show if this question answered certain way
+  conditionalValue Json?
+  
+  // Metadata
+  isActive    Boolean @default(true)
+  order       Int?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category, order])
+  @@index([isActive])
+}
+
+// ============================================================================
+// EMBEDDINGS - Optimized for pgvector
+// ============================================================================
+
+model Embedding {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId      String   @db.Uuid
+  
+  // Document reference
+  docType      String              // "task", "subtask", "pattern"
+  docId        String   @db.Uuid
+  
+  // Vector (use pgvector extension)
+  vector       Unsupported("vector(1536)")? // OpenAI ada-002 dimension
+  
+  // Metadata
+  modelVersion String   @default("text-embedding-ada-002")
+  dimensions   Int      @default(1536)
+  content      String?  // Original text that was embedded
+  
+  createdAt    DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, docType])
+  @@index([docId])
+  // Note: Add vector index manually: CREATE INDEX ON embeddings USING ivfflat (vector vector_cosine_ops);
+}
+
+// ============================================================================
+// COLLABORATION
+// ============================================================================
+
+model Project {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  ownerId     String     @db.Uuid
+  visibility  Visibility @default(private)
+  color       String?
+  
+  // Project metadata
+  isArchived  Boolean @default(false)
+  startDate   DateTime?
+  endDate     DateTime?
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  owner   User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members ProjectMember[]
+  tasks   ProjectTask[]
+
+  @@index([ownerId, isArchived])
+  @@index([name])
+}
+
+model ProjectMember {
+  projectId String     @db.Uuid
+  userId    String     @db.Uuid
+  role      String     @default("member") // "admin", "member", "viewer"
+  joinedAt  DateTime   @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@id([projectId, userId])
+  @@index([userId])
+}
+
+model ProjectTask {
+  projectId String @db.Uuid
+  taskId    String @db.Uuid
+  addedAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, taskId])
+  @@index([projectId])
+}
+
+model Comment {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId    String    @db.Uuid
+  authorId  String    @db.Uuid
+  content   String
+  mentions  String[]  @db.Uuid
+  
+  isEdited  Boolean   @default(false)
+  isDeleted Boolean   @default(false)
+  
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([taskId, createdAt(sort: Desc)])
+  @@index([authorId])
+}
+
+model TaskShare {
+  taskId     String   @db.Uuid
+  userId     String   @db.Uuid
+  permission String   @default("view") // "view", "comment", "edit"
+  sharedAt   DateTime @default(now())
+  sharedBy   String?  @db.Uuid
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+// ============================================================================
+// REMINDERS & NOTIFICATIONS
+// ============================================================================
+
+model Reminder {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @db.Uuid
+  taskId      String?   @db.Uuid
+  
+  triggerAt   DateTime
+  channel     Channel   @default(push)
+  message     String?
+  payload     Json?
+  
+  delivered   Boolean   @default(false)
+  deliveredAt DateTime?
+  failedAt    DateTime?
+  retryCount  Int       @default(0)
+  
+  createdAt   DateTime  @default(now())
+
+  user User  @relation(fields: [userId], references: [id])
+  task Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, triggerAt])
+  @@index([delivered, triggerAt])
+}
+
+// ============================================================================
+// TAGS & METADATA
+// ============================================================================
+
+model Tag {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  color     String?
+  ownerId   String?  @db.Uuid
+  isGlobal  Boolean  @default(false)
+  usageCount Int     @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([name, ownerId])
+  @@index([isGlobal, name])
+  @@index([ownerId, usageCount(sort: Desc)])
+}
+
+// ============================================================================
+// AI INFRASTRUCTURE
+// ============================================================================
+
+model AIModelConfig {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  provider         String   // "openai", "anthropic", "custom"
+  modelId          String
+  
+  // Model parameters
+  temperature      Float    @default(0.2)
+  maxTokens        Int      @default(1000)
+  topP             Float?
+  frequencyPenalty Float?
+  presencePenalty  Float?
+  
+  // Usage context
+  purpose          String?  // "planning", "questioning", "analysis"
+  promptTemplate   String?
+  systemPrompt     String?
+  
+  // Ownership
+  ownerId          String?  @db.Uuid
+  isGlobal         Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  owner User? @relation(fields: [ownerId], references: [id])
+
+  @@index([isGlobal, isActive])
+  @@index([ownerId])
+}
+
+model AuditLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entityType  String
+  entityId    String   @db.Uuid
+  action      String   // "created", "updated", "deleted", "ai_modified"
+  performedBy String   @db.Uuid
+  
+  before      Json?
+  after       Json?
+  
+  // Context
+  ipAddress   String?
+  userAgent   String?
+  meta        Json?
+  
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [performedBy], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([performedBy, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+model TaskEvent {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId        String        @db.Uuid
+  userId        String        @db.Uuid
+  eventType     TaskEventType
+  source        EventSource   @default(UI)
+  
+  // Data
+  before        Json?
+  after         Json?
+  metadata      Json?         // context: { energyLevel, location, device }
+  
+  // Observability
+  correlationId String?
+  
+  createdAt     DateTime      @default(now())
+
+  task          Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// NEW IMPROVEMENTS (TASK DEPENDENCIES, AI TRACKING, FEEDBACK, WEBHOOKS)
+// ============================================================================
+
+model TaskDependency {
+  taskId      String @db.Uuid
+  dependsOnId String @db.Uuid
+  type        String // "blocks", "relates_to", "parent_of"
+
+  task      Task @relation("Task", fields: [taskId], references: [id])
+  dependsOn Task @relation("DependsOn", fields: [dependsOnId], references: [id])
+
+  @@id([taskId, dependsOnId])
+}
+
+model AIDecision {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId    String   @db.Uuid
+  decisionType String // "breakdown", "schedule", "estimate"
+  reasoning    String
+  confidence   Float
+  accepted     Boolean?
+  metadata     Json?
+
+  createdAt DateTime @default(now())
+}
+
+model TaskFeedback {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId      String   @db.Uuid
+  userId      String   @db.Uuid
+  rating      Int // 1-5
+  whatWorked  String?
+  whatDidnt   String?
+  wouldChange String?
+  submittedAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([taskId, userId])
+}
+
+model IntegrationWebhook {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId   String  @db.Uuid
+  service  String // "calendar", "slack", "notion"
+  event    String // "task_completed", "deadline_approaching"
+  url      String
+  secret   String
+  isActive Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model RefinementSession {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId          String   @db.Uuid @unique
+  userId          String   @db.Uuid
+  
+  // Storage for comparison
+  originalPlan    Json?    // AI's initial suggestion (subtasks, estimates)
+  finalPlan       Json?    // Final version chosen by user
+  comparisonStats Json?    // Pre-calculated stats for AI vs User
+  
+  status          String   @default("active") // active, finalized, discarded
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  task     Task                @relation(fields: [taskId], references: [id])
+  user     User                @relation(fields: [userId], references: [id])
+  messages RefinementMessage[]
+}
+
+model RefinementMessage {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId String   @db.Uuid
+  role      String   // user, assistant, system
+  content   String
+  metadata  Json?    // Proposed changes or delta
+
+  createdAt DateTime @default(now())
+
+  session RefinementSession @relation(fields: [sessionId], references: [id])
+}

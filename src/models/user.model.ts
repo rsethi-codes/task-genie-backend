@@ -15,7 +15,18 @@ export interface IUser extends Document {
   preferences: {
     defaultReminderMinutesBefore?: number;
     smartSuggestionsEnabled: boolean;
-    dailySummaryTime?: string; // "08:00"
+    dailySummaryTime?: string;
+    aiStyle?: "concise" | "detailed";
+    productivityStyle?: "time-blocking" | "task-priority";
+    workingHours?: { start: string; end: string };
+    workingDays?: string[];
+    focusTime?: {
+      enabled: boolean;
+      blocks: Array<{ day: string; startTime: string; endTime: string }>;
+    };
+    behaviorData?: {};
+    remindersEnabled: boolean;
+    currentPersonaVersion: number;
   };
   roles: UserRole[];
   createdAt: Date;
@@ -76,6 +87,7 @@ const UserSchema = new Schema<IUser>({
       ],
     },
     remindersEnabled: { type: Boolean, default: true },
+    currentPersonaVersion: { type: Number, default: 1 },
   },
   roles: { type: [String], default: [UserRole.USER] },
   createdAt: { type: Date, default: Date.now },

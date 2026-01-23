@@ -70,3 +70,7 @@ const subtaskSchema = new Schema({
 });
 
 export default model("Subtask", subtaskSchema);
+
+// Subtask schema
+subtaskSchema.index({ parentTaskId: 1, order: 1 });
+subtaskSchema.index({ userId: 1, status: 1 });

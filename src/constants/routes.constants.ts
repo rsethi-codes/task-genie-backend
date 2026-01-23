@@ -10,6 +10,7 @@ export const USER_ROUTES = {
   LOGOUT: "/logout",
   REFRESH_TOKEN: "/refresh-token",
   PROFILE: "/profile",
+  ONBOARD: "/onboard",
 };
 
 export const TASK_ROUTES = {

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { TaskStatus } from "../constants/enums/task.enum";
 const { Schema, model, Types } = mongoose;
 
 const taskSchema = new Schema({
@@ -9,8 +10,8 @@ const taskSchema = new Schema({
   description: String,
   status: {
     type: String,
-    enum: ["pending", "in_progress", "completed", "cancelled", "on_hold"],
-    default: "pending",
+    enum: Object.values(TaskStatus),
+    default: TaskStatus.PENDING,
   },
   priority: {
     type: String,
@@ -165,3 +166,10 @@ const taskSchema = new Schema({
 });
 
 export default model("Task", taskSchema);
+
+// Task schema - add compound indexes for common queries
+taskSchema.index({ userId: 1, status: 1 });
+taskSchema.index({ userId: 1, dueDate: 1 });
+taskSchema.index({ userId: 1, createdAt: -1 });
+taskSchema.index({ userId: 1, tags: 1 });
+taskSchema.index({ deletedAt: 1 }, { sparse: true }); // for soft deletes

@@ -28,3 +28,6 @@ const CommentSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
   editedAt: Date,
 });
+
+// Comment schema - you'll query by task frequently
+CommentSchema.index({ taskId: 1, createdAt: -1 });

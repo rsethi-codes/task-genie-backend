@@ -1,0 +1,41 @@
+import { Router } from "express";
+import { taskController } from "../controllers/task.controller";
+import { subtaskController } from "../controllers/subtask.controller";
+import { aiController } from "../controllers/ai.controller";
+import { taskShareController } from "../controllers/task-share.controller";
+import { reminderController } from "../controllers/reminder.controller";
+import { commentController } from "../controllers/comment.controller";
+import { authenticate } from "../middlewares/auth-middleware";
+
+const router = Router();
+
+router.post("/", authenticate as any, taskController.createTask);
+router.post("/enrich", authenticate as any, taskController.enrichTask);
+router.get("/", authenticate as any, taskController.getTasks);
+router.get("/:id", authenticate as any, taskController.getTask);
+router.patch("/:id", authenticate as any, taskController.updateTask);
+router.delete("/:id", authenticate as any, taskController.deleteTask);
+router.post("/:id/restore", authenticate as any, taskController.restoreTask);
+router.post("/:id/generate-subtasks", authenticate as any, taskController.generateSubtasks);
+router.post("/:id/refine", authenticate as any, taskController.refineTask);
+
+// Subtasks
+router.post("/:taskId/subtasks", authenticate as any, subtaskController.createSubtask);
+router.get("/:taskId/subtasks", authenticate as any, subtaskController.getSubtasks);
+
+// AI
+router.post("/:taskId/ai/start-session", authenticate as any, aiController.startSession);
+
+// Sharing
+router.post("/:id/share", authenticate as any, taskShareController.shareTask);
+router.patch("/:id/share/:userId", authenticate as any, taskShareController.updateShare);
+router.delete("/:id/share/:userId", authenticate as any, taskShareController.revokeShare);
+
+// Reminders
+router.post("/:taskId/reminders", authenticate as any, reminderController.createReminder);
+
+// Comments
+router.post("/:taskId/comments", authenticate as any, commentController.addComment);
+router.get("/:taskId/comments", authenticate as any, commentController.getComments);
+
+export const taskRoutes = router;

@@ -1,21 +1,15 @@
-// In auth.route.ts - Add this log:
-import express from "express";
-import { USER_ROUTES } from "../constants/routes.constants.js";
-import { signUpUser } from "../controllers/user.controller.js";
+import { Router } from "express";
+import { userController } from "../controllers/user.controller";
+import { authenticate } from "../middlewares/auth-middleware";
 
-const router = express.Router();
+const router = Router();
 
-router.post(USER_ROUTES.SIGNUP, async (req, res) => {
-  console.log("✅ Inside signup handler!");
+// Authenticated user routes
+router.get("/me", authenticate as any, userController.getMe);
+router.patch("/me/preferences", authenticate as any, userController.updatePreferences);
+router.get("/me/analytics", authenticate as any, userController.getAnalytics);
 
-  await signUpUser(req.body);
-
-  try {
-    res.status(201).json({ message: "User signed up successfully" });
-  } catch (error) {
-    console.error("Signup error:", error);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
+// Admin/internal routes
+router.get("/clerk/:clerkId", userController.getByClerkId);
 
 export const userRoutes = router;

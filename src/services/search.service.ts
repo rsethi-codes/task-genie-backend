@@ -4,13 +4,12 @@ export class SearchService {
     async search(userId: string, query: string) {
         // Simulated vector search using text search for now
         // In production, we would get embeddings for the query and use pgvector
-        return prisma.task.findMany({
+        return (prisma as any).taskNode.findMany({
             where: {
                 userId,
                 OR: [
                     { title: { contains: query, mode: 'insensitive' } },
                     { description: { contains: query, mode: 'insensitive' } },
-                    { tags: { has: query } }
                 ],
                 deletedAt: null
             }

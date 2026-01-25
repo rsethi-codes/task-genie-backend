@@ -20,7 +20,7 @@ export const addMessageSchema = z.object({
 });
 
 export const completeSessionSchema = z.object({
-    decision: z.record(z.any()),
+    decision: z.record(z.string(), z.any()),
     decisionConfidence: z.number().min(0).max(1),
     subtasks: z.array(z.any()).optional(), // Optional subtasks to create
 });

@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { taskController } from "../controllers/task.controller";
-import { subtaskController } from "../controllers/subtask.controller";
 import { aiController } from "../controllers/ai.controller";
 import { taskShareController } from "../controllers/task-share.controller";
 import { reminderController } from "../controllers/reminder.controller";
@@ -17,11 +16,10 @@ router.patch("/:id", authenticate as any, taskController.updateTask);
 router.delete("/:id", authenticate as any, taskController.deleteTask);
 router.post("/:id/restore", authenticate as any, taskController.restoreTask);
 router.post("/:id/generate-subtasks", authenticate as any, taskController.generateSubtasks);
+router.post("/:id/generate-nodes", authenticate as any, taskController.generateNodes);
+router.post("/:id/expand", authenticate as any, taskController.expandNode);
 router.post("/:id/refine", authenticate as any, taskController.refineTask);
-
-// Subtasks
-router.post("/:taskId/subtasks", authenticate as any, subtaskController.createSubtask);
-router.get("/:taskId/subtasks", authenticate as any, subtaskController.getSubtasks);
+router.get("/coach/today", authenticate as any, taskController.getTodaysFocus);
 
 // AI
 router.post("/:taskId/ai/start-session", authenticate as any, aiController.startSession);

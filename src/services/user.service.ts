@@ -20,14 +20,14 @@ export class UserService {
   }
 
   async getAnalytics(userId: string) {
-    const totalTasks = await prisma.task.count({ where: { userId } });
-    const completedTasks = await prisma.task.count({
-      where: { userId, status: "COMPLETED" }
+    const totalTasks = await (prisma as any).taskNode.count({ where: { userId, deletedAt: null } });
+    const completedTasks = await (prisma as any).taskNode.count({
+      where: { userId, status: "COMPLETED", deletedAt: null }
     });
 
-    const taskStatusCounts = await prisma.task.groupBy({
+    const taskStatusCounts = await (prisma as any).taskNode.groupBy({
       by: ['status'],
-      where: { userId },
+      where: { userId, deletedAt: null },
       _count: true
     });
 

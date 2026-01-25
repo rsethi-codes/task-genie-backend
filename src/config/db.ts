@@ -1,15 +1,11 @@
+import { createPrismaClientWithLogging } from "../lib/database-logger.js";
 import { PrismaClient } from "@prisma/client";
+import { logger } from "../lib/logger.js";
 
 /**
- * Create Prisma client with environment-aware logging
+ * Create Prisma client with enhanced logging
  */
-const createPrismaClient = () =>
-  new PrismaClient({
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["query", "warn", "error"]
-        : ["error"],
-  });
+const createPrismaClient = createPrismaClientWithLogging;
 
 /**
  * Prisma singleton
@@ -38,11 +34,23 @@ export const verifyDatabaseConnection = async () => {
  */
 const shutdown = async (signal: string) => {
   try {
-    console.log(`🔌 Prisma disconnecting (${signal})`);
+    logger.info("database.disconnect.initiated", {
+      msg: `🔌 Prisma disconnecting (${signal})`,
+      system: {
+        signal,
+        component: "database",
+      },
+    });
     await prisma.$disconnect();
     process.exit(0);
   } catch (err) {
-    console.error("❌ Prisma disconnect failed", err);
+    logger.error("database.disconnect.failed", {
+      msg: "❌ Prisma disconnect failed",
+      error: err,
+      system: {
+        component: "database",
+      },
+    });
     process.exit(1);
   }
 };

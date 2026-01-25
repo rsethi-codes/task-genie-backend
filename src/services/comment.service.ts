@@ -1,14 +1,14 @@
-import { commentRepository } from "../repositories/comment.repository";
-import { taskRepository } from "../repositories/task.repository";
-import { auditLogRepository } from "../repositories/audit-log.repository";
+import { commentRepository } from "../repositories/comment.repository.js";
+import { taskRepository } from "../repositories/task.repository.js";
+import { auditLogRepository } from "../repositories/audit-log.repository.js";
 
 export class CommentService {
-    async addComment(userId: string, taskId: string, content: string, mentions: string[] = []) {
-        const task = await taskRepository.findById(taskId, userId);
-        if (!task) throw new Error("Task not found or unauthorized");
+    async addComment(userId: string, nodeId: string, content: string, mentions: string[] = []) {
+        const node = await taskRepository.findById(nodeId, userId);
+        if (!node) throw new Error("Node not found or unauthorized");
 
         const comment = await commentRepository.create({
-            taskId,
+            nodeId,
             authorId: userId,
             content,
             mentions,
@@ -19,17 +19,17 @@ export class CommentService {
             entityId: comment.id,
             action: "created",
             performedBy: userId,
-            meta: { taskId } as any
+            meta: { nodeId } as any
         });
 
         return comment;
     }
 
-    async getComments(userId: string, taskId: string) {
-        const task = await taskRepository.findById(taskId, userId);
-        if (!task) throw new Error("Task not found or unauthorized");
+    async getComments(userId: string, nodeId: string) {
+        const node = await taskRepository.findById(nodeId, userId);
+        if (!node) throw new Error("Node not found or unauthorized");
 
-        return commentRepository.findByTaskId(taskId);
+        return commentRepository.findByNodeId(nodeId);
     }
 
     async deleteComment(userId: string, commentId: string) {

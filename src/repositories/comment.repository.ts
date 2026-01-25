@@ -1,4 +1,4 @@
-import { prisma } from "../config/db";
+import { prisma } from "../config/db.js";
 import { Comment, Prisma } from "@prisma/client";
 
 export class CommentRepository {
@@ -6,9 +6,9 @@ export class CommentRepository {
         return prisma.comment.create({ data });
     }
 
-    async findByTaskId(taskId: string): Promise<Comment[]> {
+    async findByNodeId(nodeId: string): Promise<Comment[]> {
         return prisma.comment.findMany({
-            where: { taskId, isDeleted: false },
+            where: { nodeId, isDeleted: false },
             include: { author: true },
             orderBy: { createdAt: "desc" }
         });

@@ -1,4 +1,4 @@
-import { prisma } from "../config/db";
+import { prisma } from "../config/db.js";
 import { TaskShare, Prisma } from "@prisma/client";
 
 export class TaskShareRepository {
@@ -6,27 +6,27 @@ export class TaskShareRepository {
         return prisma.taskShare.create({ data });
     }
 
-    async update(taskId: string, userId: string, data: Prisma.TaskShareUncheckedUpdateInput): Promise<TaskShare> {
+    async update(nodeId: string, userId: string, data: Prisma.TaskShareUncheckedUpdateInput): Promise<TaskShare> {
         return prisma.taskShare.update({
             where: {
-                taskId_userId: { taskId, userId }
+                nodeId_userId: { nodeId, userId }
             },
             data
         });
     }
 
-    async delete(taskId: string, userId: string): Promise<TaskShare> {
+    async delete(nodeId: string, userId: string): Promise<TaskShare> {
         return prisma.taskShare.delete({
             where: {
-                taskId_userId: { taskId, userId }
+                nodeId_userId: { nodeId, userId }
             }
         });
     }
 
-    async find(taskId: string, userId: string): Promise<TaskShare | null> {
+    async find(nodeId: string, userId: string): Promise<TaskShare | null> {
         return prisma.taskShare.findUnique({
             where: {
-                taskId_userId: { taskId, userId }
+                nodeId_userId: { nodeId, userId }
             }
         });
     }

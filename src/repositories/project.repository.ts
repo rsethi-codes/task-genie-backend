@@ -1,4 +1,4 @@
-import { prisma } from "../config/db";
+import { prisma } from "../config/db.js";
 import { Project, ProjectMember, ProjectTask, Prisma } from "@prisma/client";
 
 export class ProjectRepository {
@@ -45,11 +45,11 @@ export class ProjectRepository {
         });
     }
 
-    async addTask(projectId: string, taskId: string): Promise<ProjectTask> {
+    async addTask(projectId: string, nodeId: string): Promise<ProjectTask> {
         return prisma.projectTask.create({
             data: {
                 projectId,
-                taskId
+                nodeId
             }
         });
     }
@@ -58,9 +58,9 @@ export class ProjectRepository {
         return prisma.projectTask.findMany({
             where: { projectId },
             include: {
-                task: {
+                node: {
                     include: {
-                        subtasks: true
+                        children: true
                     }
                 }
             }

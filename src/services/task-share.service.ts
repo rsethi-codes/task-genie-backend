@@ -1,14 +1,14 @@
-import { taskShareRepository } from "../repositories/task-share.repository";
-import { taskRepository } from "../repositories/task.repository";
-import { auditLogRepository } from "../repositories/audit-log.repository";
+import { taskShareRepository } from "../repositories/task-share.repository.js";
+import { taskRepository } from "../repositories/task.repository.js";
+import { auditLogRepository } from "../repositories/audit-log.repository.js";
 
 export class TaskShareService {
-    async shareTask(ownerId: string, taskId: string, targetUserId: string, permission: string) {
-        const task = await taskRepository.findById(taskId, ownerId);
-        if (!task) throw new Error("Task not found or unauthorized");
+    async shareTask(ownerId: string, nodeId: string, targetUserId: string, permission: string) {
+        const node = await taskRepository.findById(nodeId, ownerId);
+        if (!node) throw new Error("Node not found or unauthorized");
 
         const share = await taskShareRepository.create({
-            taskId,
+            nodeId,
             userId: targetUserId,
             permission,
             sharedBy: ownerId
@@ -16,7 +16,7 @@ export class TaskShareService {
 
         await auditLogRepository.create({
             entityType: "task_share",
-            entityId: taskId,
+            entityId: nodeId,
             action: "shared",
             performedBy: ownerId,
             meta: { targetUserId, permission } as any
@@ -25,15 +25,15 @@ export class TaskShareService {
         return share;
     }
 
-    async updateShare(ownerId: string, taskId: string, targetUserId: string, permission: string) {
-        const task = await taskRepository.findById(taskId, ownerId);
-        if (!task) throw new Error("Task not found or unauthorized");
+    async updateShare(ownerId: string, nodeId: string, targetUserId: string, permission: string) {
+        const node = await taskRepository.findById(nodeId, ownerId);
+        if (!node) throw new Error("Node not found or unauthorized");
 
-        const share = await taskShareRepository.update(taskId, targetUserId, { permission });
+        const share = await taskShareRepository.update(nodeId, targetUserId, { permission });
 
         await auditLogRepository.create({
             entityType: "task_share",
-            entityId: taskId,
+            entityId: nodeId,
             action: "share_updated",
             performedBy: ownerId,
             meta: { targetUserId, permission } as any
@@ -42,15 +42,15 @@ export class TaskShareService {
         return share;
     }
 
-    async revokeShare(ownerId: string, taskId: string, targetUserId: string) {
-        const task = await taskRepository.findById(taskId, ownerId);
-        if (!task) throw new Error("Task not found or unauthorized");
+    async revokeShare(ownerId: string, nodeId: string, targetUserId: string) {
+        const node = await taskRepository.findById(nodeId, ownerId);
+        if (!node) throw new Error("Node not found or unauthorized");
 
-        await taskShareRepository.delete(taskId, targetUserId);
+        await taskShareRepository.delete(nodeId, targetUserId);
 
         await auditLogRepository.create({
             entityType: "task_share",
-            entityId: taskId,
+            entityId: nodeId,
             action: "share_revoked",
             performedBy: ownerId,
             meta: { targetUserId } as any

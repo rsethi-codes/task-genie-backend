@@ -8,9 +8,9 @@ export class TaskEventRepository {
         });
     }
 
-    async findByTaskId(taskId: string): Promise<TaskEvent[]> {
+    async findByNodeId(nodeId: string): Promise<TaskEvent[]> {
         return prisma.taskEvent.findMany({
-            where: { taskId },
+            where: { nodeId },
             orderBy: { createdAt: "desc" },
         });
     }

@@ -1,7 +1,6 @@
 import { aiRepository } from "../repositories/ai.repository";
 import { taskRepository } from "../repositories/task.repository";
 import { auditLogRepository } from "../repositories/audit-log.repository";
-import { subtaskRepository } from "../repositories/subtask.repository";
 import { intelligenceService } from "./intelligence.service";
 
 export class AIService {
@@ -56,21 +55,25 @@ export class AIService {
             decisionConfidence: data.decisionConfidence,
         });
 
-        // If there's a task associated, update it with AI metadata
+        // If there's a node associated, update it with AI metadata
         if (session.taskId) {
             await taskRepository.update(session.taskId, userId, {
                 aiMetadata: data.decision as any,
-            });
+            } as any);
 
-            // Create subtasks if provided
+            // Create child nodes if provided
             if (data.subtasks && Array.isArray(data.subtasks)) {
-                for (const sub of data.subtasks) {
-                    await subtaskRepository.create({
+                for (let i = 0; i < data.subtasks.length; i++) {
+                    const sub = data.subtasks[i];
+                    await taskRepository.create({
                         ...sub,
-                        parentTaskId: session.taskId,
+                        parentId: session.taskId,
+                        rootTaskId: session.taskId, // Assuming single nesting for now
                         userId,
                         aiGenerated: true,
-                    });
+                        order: i,
+                        nodeType: 'ACTION'
+                    } as any);
                 }
             }
         }

@@ -8,7 +8,7 @@ export const updateUserPreferencesSchema = z.object({
     workEndTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
     preferredWorkDays: z.array(z.nativeEnum(DayOfWeek)).optional(),
     breakDuration: z.number().int().nonnegative().optional(),
-    customPreferences: z.record(z.any()).optional(),
+    customPreferences: z.record(z.string(), z.any()).optional(),
 });
 
 export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;

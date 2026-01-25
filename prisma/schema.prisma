@@ -20,7 +20,7 @@ enum UserRole {
   OWNER
 }
 
-enum TaskStatus {
+enum NodeStatus {
   DRAFT     // Idea, not yet committed
   ACTIVE    // Planned for execution
   BLOCKED   // Waiting on external factor
@@ -48,15 +48,6 @@ enum Channel {
   webhook
 }
 
-enum SubtaskStatus {
-  pending
-  in_progress
-  completed
-  skipped
-  blocked
-  failed
-}
-
 enum QuestionType {
   text
   single_choice
@@ -82,6 +73,13 @@ enum AttemptOutcome {
   abandoned
   failed
   interrupted
+}
+
+enum AIGenerationStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
 }
 
 enum TaskEventType {
@@ -157,8 +155,7 @@ model User {
 
   // Relations
   profile              UserProfile?
-  tasks                Task[]
-  subtaskAttempts      SubtaskAttempt[]
+  taskNodes           TaskNode[]
   projectsOwned        Project[]              @relation("ProjectOwner")
   projectsMemberOf     ProjectMember[]
   comments             Comment[]
@@ -289,92 +286,114 @@ model SchedulePreference {
 }
 
 // ============================================================================
-// TASKS - Core entity with better structure
+// TASK NODES - Unified hierarchical system replacing Task/Subtask
 // ============================================================================
 
-model Task {
-  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String     @db.Uuid
-  title       String
-  description String?
-  status      TaskStatus @default(DRAFT)
-  priority    Priority   @default(MEDIUM)
-  category    String?
-  tags        String[]
-
-  // Time management - more explicit
-  startDate         DateTime?
-  dueDate           DateTime?
-  estimatedDuration Int?            // minutes
-  actualDuration    Int?            // computed from subtask attempts
-  completedAt       DateTime?
-  
-  // Context - partially normalized
-  locationName      String?
-  locationType      String?         // "home", "office", "anywhere"
-  requiresInternet  Boolean @default(false)
-  requiresTools     String[]
-  
-  energyRequired    EnergyLevel?
-  focusRequired     FocusLevel?
-  preferredTimeOfDay TimeOfDay[]
-  
-  // AI planning results (keep as JSON - too variable to normalize)
-  aiMetadata        Json?           // complexity, reasoning, confidence
-  
-  // Progress tracking - normalized
-  hasSubtasks       Boolean @default(false)
-  subtaskCount      Int     @default(0)
-  completedSubtasks Int     @default(0)
-  progressPercent   Float   @default(0)
-  
-  // Recurrence - structured
-  isRecurring       Boolean @default(false)
-  recurrenceRule    String? // iCal RRULE format
-  recurrenceEnd     DateTime?
-  
-  // Learning metadata
-  similarityScore   Float?          // Similarity to past tasks
-  basedOnPatternId  String? @db.Uuid
-  
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  // Correctness
-  idempotencyKey String?
-
-  // Relations
-  user                 User                @relation(fields: [userId], references: [id])
-  projects             ProjectTask[]
-  comments             Comment[]
-  reminders            Reminder[]
-  subtasks             Subtask[]
-  shares               TaskShare[]
-  questionnaireHistory Json[] // Array of questionnaire responses
-  dependencies         TaskDependency[] @relation("Task")
-  dependentOn          TaskDependency[] @relation("DependsOn")
-  feedback             TaskFeedback[]
-  refinementSession    RefinementSession?
-  questionSessions     QuestionSession[]
-  analytics            TaskAnalytics[]
-  events               TaskEvent[]
-  basedOnPattern       TaskPattern?        @relation("TaskFromPattern", fields: [basedOnPatternId], references: [id])
-  generatedPatterns    TaskPattern[]       @relation("PatternFromTask")
-
-  @@unique([userId, idempotencyKey])
-  @@index([userId, status])
-  @@index([userId, dueDate])
-  @@index([userId, createdAt(sort: Desc)])
-  @@index([deletedAt])
-  @@index([userId, category])
-  @@index([isRecurring])
+enum NodeType {
+  ROOT      // long-term goal
+  PHASE     // multi-day / multi-week milestone  
+  DAILY     // repeatable execution guidance
+  ACTION    // one-off executable step
+  GUIDANCE  // non-completable coaching insight
 }
 
-// NEW: Time-series analytics for tasks (queryable, not JSON)
+enum TemporalIntent {
+  today     // Focus for today
+  daily     // Repeats daily
+  phase     // Part of current phase
+  anytime   // No specific timing
+}
+
+model TaskNode {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String     @db.Uuid
+  
+  // Hierarchy
+  parentId    String?    @db.Uuid  // null for ROOT nodes
+  rootTaskId  String     @db.Uuid  // points to ROOT for all descendants
+  
+  // Basic fields
+  title       String
+  description String?
+  nodeType    NodeType
+  status      NodeStatus? @default(DRAFT)  // null for GUIDANCE nodes
+  priority    Priority?   @default(MEDIUM)
+  category    String?
+  order       Int
+  
+  // Time & execution
+  startDate            DateTime?
+  dueDate              DateTime?
+  estimatedDuration    Int?     // minutes per execution
+  energyRequired       EnergyLevel?
+  focusRequired        FocusLevel?
+  recurrenceRule       String?  // iCal RRULE for DAILY nodes
+  isRecurring          Boolean  @default(false)
+  isCompletable        Boolean  @default(true)  // false for GUIDANCE nodes
+  
+  // Location & Context
+  locationName         String?
+  locationType         String?
+  requiresInternet     Boolean  @default(false)
+  requiresTools        String[]
+  preferredTimeOfDay   TimeOfDay[]
+  
+  // AI metadata
+  aiGenerated         Boolean @default(false)
+  aiMetadata          Json?    // provider, feature, promptHash, reasoning, confidence
+  
+  // Progress tracking
+  progressMeta        Json?    // contributesToProgress, weight
+  
+  // Temporal intent
+  temporalIntent       TemporalIntent @default(anytime)
+  
+  // System fields
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  deletedAt           DateTime?
+  
+  // Correctness
+  idempotencyKey      String?
+  aiGenerationStatus  AIGenerationStatus @default(PENDING)
+
+  // Relations
+  user                User                @relation(fields: [userId], references: [id])
+  parent              TaskNode?           @relation("NodeHierarchy", fields: [parentId], references: [id])
+  children            TaskNode[]          @relation("NodeHierarchy")
+  rootTask            TaskNode            @relation("RootTask", fields: [rootTaskId], references: [id])
+  descendants         TaskNode[]          @relation("RootTask")
+  
+  // Legacy relations (for migration compatibility)
+  projects            ProjectTask[]
+  comments            Comment[]
+  reminders           Reminder[]
+  shares              TaskShare[]
+  dependencies        TaskDependency[] @relation("Task")
+  dependentOn         TaskDependency[] @relation("DependsOn")
+  feedback            TaskFeedback[]
+  refinementSession   RefinementSession?
+  questionSessions    QuestionSession[]
+  analytics           TaskAnalytics[]
+  events              TaskEvent[]
+  embeddings          Embedding[]
+  patternFromNode     TaskPattern[]       @relation("PatternFromNode")
+  basedOnPattern      TaskPattern?        @relation("NodeFromPattern")
+  basedOnPatternId    String?             @db.Uuid
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, nodeType])
+  @@index([userId, status])
+  @@index([rootTaskId, order])
+  @@index([parentId, order])
+  @@index([temporalIntent])
+  @@index([deletedAt])
+}
+
+// NEW: Time-series analytics for task nodes (queryable, not JSON)
 model TaskAnalytics {
   id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  taskId String @db.Uuid
+  nodeId String @db.Uuid
   
   // Snapshot at point in time
   recordedAt           DateTime @default(now())
@@ -400,9 +419,9 @@ model TaskAnalytics {
   aiConfidence         Float?
   userSatisfaction     Int?     // 1-5 rating
   
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  node TaskNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
-  @@index([taskId, recordedAt(sort: Desc)])
+  @@index([nodeId, recordedAt(sort: Desc)])
   @@index([recordedAt])
 }
 
@@ -440,101 +459,12 @@ model TaskPattern {
   updatedAt DateTime @updatedAt
 
   user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tasksUsingPattern Task[] @relation("TaskFromPattern")
-  sourceTask        Task?  @relation("PatternFromTask", fields: [sourceTaskId], references: [id])
-  sourceTaskId      String? @db.Uuid
+  nodesUsingPattern TaskNode[] @relation("PatternFromNode")
+  sourceNode        TaskNode?  @relation("NodeFromPattern", fields: [sourceNodeId], references: [id])
+  sourceNodeId      String? @db.Uuid @unique
 
   @@index([userId, category])
   @@index([userId, confidence(sort: Desc)])
-}
-
-// ============================================================================
-// SUBTASKS - First-class citizens with attempt tracking
-// ============================================================================
-
-model Subtask {
-  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  parentTaskId String        @db.Uuid
-  userId       String        @db.Uuid
-  title        String
-  description  String?
-  status       SubtaskStatus @default(pending)
-  order        Int
-  
-  // Time
-  dueDate           DateTime?
-  estimatedDuration Int?
-  actualDuration    Int?      // Computed from attempts
-  scheduledStart    DateTime?
-  scheduledEnd      DateTime?
-  completedAt       DateTime?
-  
-  // Context
-  energyRequired    EnergyLevel?
-  focusRequired     FocusLevel?
-  locationName      String?
-  requiresTools     String[]
-  
-  // Dependencies
-  blockedBy         String[]  @db.Uuid // Other subtask IDs
-  isBlocking        Boolean @default(false)
-  
-  // AI metadata
-  aiGenerated       Boolean @default(false)
-  aiSuggestions     Json?
-  aiConfidence      Float?
-  promptHash        String?   // Hash of the prompt used to generate this
-  userModified      Boolean @default(false)
-  notes             String?
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  parentTask Task             @relation(fields: [parentTaskId], references: [id], onDelete: Cascade)
-  attempts   SubtaskAttempt[]
-
-  @@index([parentTaskId, order])
-  @@index([userId, status])
-  @@index([scheduledStart])
-}
-
-// NEW: Normalized attempt tracking (was JSON in Subtask)
-model SubtaskAttempt {
-  id         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subtaskId  String          @db.Uuid
-  userId     String          @db.Uuid
-  
-  // Attempt details
-  attemptNumber   Int
-  outcome         AttemptOutcome
-  
-  // Timing
-  startedAt       DateTime
-  endedAt         DateTime?
-  duration        Int?              // minutes
-  pauseDuration   Int?              // minutes paused
-  
-  // Context at time of attempt
-  energyLevel     EnergyLevel?
-  focusLevel      FocusLevel?
-  location        String?
-  timeOfDay       TimeOfDay?
-  dayOfWeek       DayOfWeek?
-  
-  // Behavioral data
-  distractionCount Int @default(0)
-  toolsSwitched    Int @default(0)
-  notes            String?
-  
-  createdAt DateTime @default(now())
-
-  subtask Subtask @relation(fields: [subtaskId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id])
-
-  @@index([subtaskId, attemptNumber])
-  @@index([userId, startedAt(sort: Desc)])
-  @@index([outcome])
 }
 
 // ============================================================================
@@ -544,7 +474,7 @@ model SubtaskAttempt {
 model QuestionSession {
   id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId        String        @db.Uuid
-  taskId        String?       @db.Uuid
+  nodeId        String?       @db.Uuid
   modelConfigId String?       @db.Uuid
   
   status        SessionStatus @default(open)
@@ -575,7 +505,7 @@ model QuestionSession {
 
   // Relations
   user      User               @relation(fields: [userId], references: [id])
-  task      Task?              @relation(fields: [taskId], references: [id])
+  node      TaskNode?          @relation(fields: [nodeId], references: [id])
   responses QuestionResponse[]
 
   @@index([userId, createdAt(sort: Desc)])
@@ -652,7 +582,7 @@ model Embedding {
   ownerId      String   @db.Uuid
   
   // Document reference
-  docType      String              // "task", "subtask", "pattern"
+  docType      String              // "taskNode", "pattern"
   docId        String   @db.Uuid
   
   // Vector (use pgvector extension)
@@ -666,6 +596,7 @@ model Embedding {
   createdAt    DateTime @default(now())
 
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  taskNode TaskNode? @relation(fields: [docId], references: [id])
 
   @@index([ownerId, docType])
   @@index([docId])
@@ -715,19 +646,19 @@ model ProjectMember {
 
 model ProjectTask {
   projectId String @db.Uuid
-  taskId    String @db.Uuid
+  nodeId    String @db.Uuid
   addedAt   DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  node    TaskNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
-  @@id([projectId, taskId])
+  @@id([projectId, nodeId])
   @@index([projectId])
 }
 
 model Comment {
   id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  taskId    String    @db.Uuid
+  nodeId    String    @db.Uuid
   authorId  String    @db.Uuid
   content   String
   mentions  String[]  @db.Uuid
@@ -738,24 +669,24 @@ model Comment {
   createdAt DateTime  @default(now())
   editedAt  DateTime?
 
-  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author User @relation(fields: [authorId], references: [id])
+  node   TaskNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  author User      @relation(fields: [authorId], references: [id])
 
-  @@index([taskId, createdAt(sort: Desc)])
+  @@index([nodeId, createdAt(sort: Desc)])
   @@index([authorId])
 }
 
 model TaskShare {
-  taskId     String   @db.Uuid
+  nodeId     String   @db.Uuid
   userId     String   @db.Uuid
   permission String   @default("view") // "view", "comment", "edit"
   sharedAt   DateTime @default(now())
   sharedBy   String?  @db.Uuid
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id])
+  node TaskNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id])
 
-  @@id([taskId, userId])
+  @@id([nodeId, userId])
   @@index([userId])
 }
 
@@ -766,7 +697,7 @@ model TaskShare {
 model Reminder {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId      String    @db.Uuid
-  taskId      String?   @db.Uuid
+  nodeId      String?   @db.Uuid
   
   triggerAt   DateTime
   channel     Channel   @default(push)
@@ -780,8 +711,8 @@ model Reminder {
   
   createdAt   DateTime  @default(now())
 
-  user User  @relation(fields: [userId], references: [id])
-  task Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id])
+  node TaskNode? @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@index([userId, triggerAt])
   @@index([delivered, triggerAt])
@@ -867,7 +798,7 @@ model AuditLog {
 
 model TaskEvent {
   id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  taskId        String        @db.Uuid
+  nodeId        String        @db.Uuid
   userId        String        @db.Uuid
   eventType     TaskEventType
   source        EventSource   @default(UI)
@@ -882,9 +813,9 @@ model TaskEvent {
   
   createdAt     DateTime      @default(now())
 
-  task          Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  node          TaskNode      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
-  @@index([taskId])
+  @@index([nodeId])
   @@index([userId])
   @@index([createdAt])
 }
@@ -894,14 +825,14 @@ model TaskEvent {
 // ============================================================================
 
 model TaskDependency {
-  taskId      String @db.Uuid
+  nodeId      String @db.Uuid
   dependsOnId String @db.Uuid
   type        String // "blocks", "relates_to", "parent_of"
 
-  task      Task @relation("Task", fields: [taskId], references: [id])
-  dependsOn Task @relation("DependsOn", fields: [dependsOnId], references: [id])
+  node      TaskNode @relation("Task", fields: [nodeId], references: [id])
+  dependsOn TaskNode @relation("DependsOn", fields: [dependsOnId], references: [id])
 
-  @@id([taskId, dependsOnId])
+  @@id([nodeId, dependsOnId])
 }
 
 model AIDecision {
@@ -918,7 +849,7 @@ model AIDecision {
 
 model TaskFeedback {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  taskId      String   @db.Uuid
+  nodeId      String   @db.Uuid
   userId      String   @db.Uuid
   rating      Int // 1-5
   whatWorked  String?
@@ -926,10 +857,10 @@ model TaskFeedback {
   wouldChange String?
   submittedAt DateTime @default(now())
 
-  task Task @relation(fields: [taskId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  node TaskNode @relation(fields: [nodeId], references: [id])
+  user User      @relation(fields: [userId], references: [id])
 
-  @@unique([taskId, userId])
+  @@unique([nodeId, userId])
 }
 
 model IntegrationWebhook {
@@ -946,7 +877,7 @@ model IntegrationWebhook {
 
 model RefinementSession {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  taskId          String   @db.Uuid @unique
+  nodeId          String   @db.Uuid @unique
   userId          String   @db.Uuid
   
   // Storage for comparison
@@ -959,7 +890,7 @@ model RefinementSession {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  task     Task                @relation(fields: [taskId], references: [id])
+  node     TaskNode            @relation(fields: [nodeId], references: [id])
   user     User                @relation(fields: [userId], references: [id])
   messages RefinementMessage[]
 }

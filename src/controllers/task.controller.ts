@@ -114,6 +114,42 @@ export class TaskController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  async generateNodes(req: AuthenticatedRequest, res: Response) {
+    const correlationId = (req as any).correlationId;
+    try {
+      const nodes = await intelligenceService.generateNodes(req.user!.id, req.params.id);
+      res.status(201).json(nodes);
+    } catch (error: any) {
+      logger.error("Failed to generate nodes", { correlationId, error: error.message, taskId: req.params.id });
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async expandNode(req: AuthenticatedRequest, res: Response) {
+    const correlationId = (req as any).correlationId;
+    try {
+      const { expansionType } = req.body;
+      if (!expansionType || !['PHASE_TO_DAILY', 'DAILY_TO_ACTION', 'ROOT_TO_PHASE'].includes(expansionType)) {
+        return res.status(400).json({ error: "Valid expansionType is required" });
+      }
+
+      const children = await intelligenceService.expandNode(req.user!.id, req.params.id, expansionType);
+      res.status(201).json(children);
+    } catch (error: any) {
+      logger.error("Failed to expand node", { correlationId, error: error.message, nodeId: req.params.id });
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async getTodaysFocus(req: AuthenticatedRequest, res: Response) {
+    try {
+      const todaysFocus = await intelligenceService.getTodaysFocus(req.user!.id);
+      res.json(todaysFocus);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
 
 export const taskController = new TaskController();

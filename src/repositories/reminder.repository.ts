@@ -1,4 +1,4 @@
-import { prisma } from "../config/db";
+import { prisma } from "../config/db.js";
 import { Reminder, Prisma } from "@prisma/client";
 
 export class ReminderRepository {
@@ -15,7 +15,7 @@ export class ReminderRepository {
                     gt: new Date()
                 }
             },
-            include: { task: true },
+            include: { node: true },
             orderBy: { triggerAt: "asc" }
         });
     }

@@ -344,6 +344,8 @@ model TaskNode {
   
   // Progress tracking
   progressMeta        Json?    // contributesToProgress, weight
+  actualDuration       Int      @default(0) // minutes
+  lastStartedAt       DateTime?
   
   // Temporal intent
   temporalIntent       TemporalIntent @default(anytime)

@@ -10,19 +10,33 @@ export class IntelligenceService {
     /**
      * Generates hierarchical task nodes for a task based on user persona and task context.
      */
-    async generateNodes(userId: string, taskId: string): Promise<TaskNode[]> {
+    async generateNodes(userId: string, taskId: string, force = false): Promise<TaskNode[]> {
         const user = await userRepository.findWithPersona(userId);
         if (!user) throw new Error("User not found");
 
         const task = await taskRepository.findById(taskId, userId);
         if (!task) throw new Error("Task not found");
 
-        // Safety: If this task already has children, avoid re-generating unless forced (or handle idempotency)
+        // Safety: If this task already has children, avoid re-generating unless forced
         const existingChildren = await (prisma as any).taskNode.findMany({
-            where: { parentId: taskId, userId }
+            where: { rootTaskId: task.rootTaskId, userId, NOT: { id: task.id } }
         });
-        if (existingChildren.length > 0) {
-            return existingChildren; // Idempotency: don't double generate
+
+        if (existingChildren.length > 0 && !force) {
+            return existingChildren;
+        }
+
+        // If forced, we delete all non-completed children to "reset" the plan
+        // COMPLETED actions are preserved as historical record
+        if (force) {
+            await (prisma as any).taskNode.deleteMany({
+                where: {
+                    rootTaskId: task.rootTaskId,
+                    userId,
+                    NOT: { id: taskId },
+                    status: { not: NodeStatus.COMPLETED }
+                }
+            });
         }
 
         try {
@@ -32,12 +46,8 @@ export class IntelligenceService {
             );
 
             const aiProposedNodes = providerResult.data;
-
-            // Guardrail: Limit node count as per requirements (3-7 top-level nodes)
             const limitedNodes = aiProposedNodes.slice(0, 7);
 
-            // Save nodes preserving hierarchy
-            // Second arg is rootTaskId, fifth arg is parentId
             const createdNodes = await this.saveNodeHierarchy(
                 userId,
                 task.rootTaskId,
@@ -46,10 +56,16 @@ export class IntelligenceService {
                 taskId
             );
 
+            // Emit completion event
+            const { emitTaskUpdate } = await import("../config/socket.js");
+            emitTaskUpdate(taskId, { taskId, status: 'READY' });
+
             return createdNodes;
 
         } catch (error: any) {
             console.error("AI NodeGeneration Error:", error);
+            const { emitTaskUpdate } = await import("../config/socket.js");
+            emitTaskUpdate(taskId, { taskId, status: 'FAILED', error: error.message });
             throw new Error(`Failed to generate nodes: ${error.message}`);
         }
     }

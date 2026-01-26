@@ -118,7 +118,8 @@ export class TaskController {
   async generateNodes(req: AuthenticatedRequest, res: Response) {
     const correlationId = (req as any).correlationId;
     try {
-      const nodes = await intelligenceService.generateNodes(req.user!.id, req.params.id);
+      const force = req.body.force === true;
+      const nodes = await intelligenceService.generateNodes(req.user!.id, req.params.id, force);
       res.status(201).json(nodes);
     } catch (error: any) {
       logger.error("Failed to generate nodes", { correlationId, error: error.message, taskId: req.params.id });
@@ -138,6 +139,17 @@ export class TaskController {
       res.status(201).json(children);
     } catch (error: any) {
       logger.error("Failed to expand node", { correlationId, error: error.message, nodeId: req.params.id });
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async reorderTasks(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { id, parentId, newOrder } = req.body;
+      if (!id || newOrder === undefined) return res.status(400).json({ error: "id and newOrder are required" });
+      const nodes = await taskService.reorderTasks(id, parentId || null, req.user!.id, newOrder);
+      res.json(nodes);
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   }

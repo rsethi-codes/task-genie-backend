@@ -3,7 +3,6 @@ import { taskEventRepository, TaskEventType, EventSource } from "../repositories
 import { CreateTaskInput, UpdateTaskInput } from "../schemas/task.schema.js";
 import { TaskNode, NodeStatus, NodeType } from "@prisma/client";
 import { taskGenerationQueue } from "../config/queue.js";
-import { logger } from "../lib/logger.js";
 
 const ALLOWED_TRANSITIONS: Record<NodeStatus, NodeStatus[]> = {
   [NodeStatus.DRAFT]: [NodeStatus.ACTIVE, NodeStatus.ARCHIVED],
@@ -70,15 +69,40 @@ export class TaskService {
       }
     }
 
-    const updated = await taskRepository.update(nodeId, userId, {
+    const updates: any = {
       ...data,
       aiMetadata: data.aiMetadata as any,
-    } as any);
+    };
+
+    // Duration Tracking Logic
+    if (data.status && data.status !== before.status) {
+      const now = new Date();
+
+      // Starting work
+      if (data.status === NodeStatus.ACTIVE) {
+        updates.lastStartedAt = now;
+      }
+      // Stopping work (completed, blocked, archived, or draft)
+      else if (before.status === NodeStatus.ACTIVE && (before as any).lastStartedAt) {
+        const deltaMs = now.getTime() - new Date((before as any).lastStartedAt).getTime();
+        const deltaMins = Math.round(deltaMs / (1000 * 60));
+        updates.actualDuration = ((before as any).actualDuration || 0) + deltaMins;
+        updates.lastStartedAt = null;
+      }
+    }
+
+    const updated = await taskRepository.update(nodeId, userId, updates);
 
     // Hierarchical Status Propagation
-    // If an ACTION or DAILY task changes status, sync the parent (PHASE or ROOT)
     if (data.status && data.status !== before.status && updated.parentId) {
       await this.propagateStatusUp(updated.parentId, userId);
+    }
+
+    // Emit Socket Update
+    const { emitTaskUpdate } = await import("../config/socket.js");
+    emitTaskUpdate(nodeId, { taskId: nodeId, status: updated.status as string });
+    if (updated.rootTaskId !== nodeId) {
+      emitTaskUpdate(updated.rootTaskId, { taskId: updated.rootTaskId, status: 'UPDATED' });
     }
 
     // Multi-event logging
@@ -177,6 +201,10 @@ export class TaskService {
     }, 0);
 
     return Math.round((completedWeight / completableChildren.length) * 100);
+  }
+
+  async reorderTasks(nodeId: string, parentId: string | null, userId: string, newOrder: number) {
+    return taskRepository.reorder(nodeId, parentId, userId, newOrder);
   }
 }
 

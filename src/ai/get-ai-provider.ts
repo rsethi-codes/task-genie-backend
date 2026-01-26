@@ -71,4 +71,5 @@ export const FeatureMapping: Record<AIFeature, { test: string; prod: string }> =
   RefinementAnalysis: { test: "Heuristics", prod: "Gemini" },
   NodeGeneration: { test: "Heuristics", prod: "Gemini 2.0" },
   NodeExpansion: { test: "Heuristics", prod: "Gemini 2.0" },
+  CheckIn: { test: "Heuristics", prod: "Gemini" },
 };

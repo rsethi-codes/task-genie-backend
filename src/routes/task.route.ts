@@ -19,6 +19,7 @@ router.post("/:id/generate-subtasks", authenticate as any, taskController.genera
 router.post("/:id/generate-nodes", authenticate as any, taskController.generateNodes);
 router.post("/:id/expand", authenticate as any, taskController.expandNode);
 router.post("/:id/refine", authenticate as any, taskController.refineTask);
+router.post("/reorder", authenticate as any, taskController.reorderTasks);
 router.get("/coach/today", authenticate as any, taskController.getTodaysFocus);
 
 // AI

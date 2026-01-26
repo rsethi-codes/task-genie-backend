@@ -9,11 +9,11 @@ export const breakTaskIntoSubtasksPrompt = (
   const daysUntilDue =
     dueDate
       ? Math.max(
-          Math.ceil(
-            (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-          ),
-          0
-        )
+        Math.ceil(
+          (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        ),
+        0
+      )
       : null;
 
   return `
@@ -46,24 +46,24 @@ NODE TYPES:
 USER CONTEXT:
 Persona Traits:
 ${input.user.personaSnapshot
-  ? JSON.stringify(input.user.personaSnapshot.traits)
-  : "No specific persona data available"}
+      ? JSON.stringify(input.user.personaSnapshot.traits)
+      : "No specific persona data available"}
 
 Behavior Patterns:
 ${input.user.behaviorPatterns.length > 0
-  ? input.user.behaviorPatterns
-      .map((p: any) => `${p.patternType} (confidence ${p.confidence})`)
-      .join(", ")
-  : "No observed behavior patterns"}
+      ? input.user.behaviorPatterns
+        .map((p: any) => `${p.patternType} (confidence ${p.confidence})`)
+        .join(", ")
+      : "No observed behavior patterns"}
 
 TASK CONTEXT (ENRICHED):
 ${JSON.stringify({
-  title: input.task?.title,
-  description: input.task?.description,
-  priority: input.task?.priority,
-  category: input.task?.category,
-  dueDate: input.task?.dueDate,
-})}
+        title: input.task?.title,
+        description: input.task?.description,
+        priority: input.task?.priority,
+        category: input.task?.category,
+        dueDate: input.task?.dueDate,
+      })}
 
 TIME CONTEXT (CRITICAL):
 - Today: ${today.toISOString().split("T")[0]}
@@ -145,7 +145,7 @@ export const expandNodePrompt = (
   }
 ) => {
   const today = new Date();
-  
+
   return `
 SYSTEM ROLE:
 You are TaskGenie, an execution coach.
@@ -161,11 +161,11 @@ ABSOLUTE RULES (NON-NEGOTIABLE):
 EXPANSION CONTEXT:
 Parent Node:
 ${JSON.stringify({
-  title: input.node.title,
-  description: input.node.description,
-  nodeType: input.node.nodeType,
-  temporalIntent: input.node.temporalIntent,
-})}
+    title: input.node.title,
+    description: input.node.description,
+    nodeType: input.node.nodeType,
+    temporalIntent: input.node.temporalIntent,
+  })}
 
 Expansion Type: ${input.expansionType}
 
@@ -177,8 +177,8 @@ EXPANSION RULES:
 USER CONTEXT:
 Persona Traits:
 ${input.user.personaSnapshot
-  ? JSON.stringify(input.user.personaSnapshot.traits)
-  : "No specific persona data available"}
+      ? JSON.stringify(input.user.personaSnapshot.traits)
+      : "No specific persona data available"}
 
 CHILD NODE REQUIREMENTS:
 - Each child must be immediately actionable
@@ -202,38 +202,141 @@ OUTPUT FORMAT (JSON ARRAY ONLY):
 `;
 };
 
+// export const taskEnrichmentPrompt = (input: TaskEnrichmentInput) => `
+// SYSTEM ROLE:
+// You are TaskGenie, an expert productivity assistant that converts short task intents into clear, actionable task definitions.
+// Your goal is to infer missing context carefully and help the user avoid re-explaining the task later.
+
+// STRICT RULES:
+// - Return ONLY valid JSON
+// - Do NOT include markdown, comments, or explanations
+// - Do NOT invent unrealistic deadlines
+// - Be specific, practical, and neutral in tone
+// - Optimize the output so downstream subtask generation is easy and accurate
+
+// TASK INTENT:
+// "${input.title}"
+
+// OBJECTIVE:
+// Expand the short intent into a task definition that is:
+// 1. Clear enough to act on immediately
+// 2. Specific enough that subtasks can be generated without asking follow-up questions
+// 3. Conservative in assumptions (infer only what is reasonable)
+
+// INFERENCE GUIDELINES:
+// - If the intent implies a deliverable (e.g. "prepare", "build", "write"), describe the expected outcome
+// - If the intent implies multiple steps, reflect that in the description
+// - If no time constraint is mentioned, set dueDate to null
+// - If urgency words are present (e.g. today, asap, urgent), reflect that in priority
+// - Prefer clarity over verbosity
+
+// FIELD DEFINITIONS:
+// - description:
+//   A concise but complete explanation of what "done" looks like.
+//   Mention the goal, scope, and any obvious constraints.
+// - priority:
+//   Choose based on urgency signals in the text.
+//   Use MEDIUM if unclear.
+// - category:
+//   A short, human-readable category such as:
+//   Work, Personal, Health, Learning, Finance, Admin, Home, Planning, Social
+// - dueDate:
+//   ISO 8601 date string ONLY if a deadline is clearly implied.
+//   Otherwise null.
+// - reasoning:
+//   One short sentence explaining how priority and category were inferred.
+
+// OUTPUT SCHEMA (JSON ONLY):
+// {
+//   "description": "string",
+//   "priority": "LOW" | "MEDIUM" | "HIGH" | "URGENT",
+//   "category": "string",
+//   "dueDate": "string | null",
+//   "reasoning": "string"
+// }
+// `;
+
 export const taskEnrichmentPrompt = (input: TaskEnrichmentInput) => `
 SYSTEM ROLE:
 You are TaskGenie, an expert productivity assistant that converts short task intents into clear, actionable task definitions.
-Your goal is to infer missing context carefully and help the user avoid re-explaining the task later.
+Your goal is to infer missing context carefully and help the user avoid re-explaining the task later, while remaining conservative in assumptions.
+
+TODAY'S CONTEXT:
+- Today's date is: ${new Date().toISOString().split("T")[0]}
+- Today is: ${new Date().toISOString().split("T")[1]}
+- All relative time phrases MUST be interpreted relative to this date.
 
 STRICT RULES:
 - Return ONLY valid JSON
 - Do NOT include markdown, comments, or explanations
 - Do NOT invent unrealistic deadlines
+- Do NOT guess missing facts beyond reasonable inference
+- Do NOT introduce new requirements not implied by the intent
 - Be specific, practical, and neutral in tone
-- Optimize the output so downstream subtask generation is easy and accurate
+- Optimize the output so downstream subtask, phase, and action generation is easy and accurate
 
 TASK INTENT:
 "${input.title}"
 
 OBJECTIVE:
 Expand the short intent into a task definition that is:
-1. Clear enough to act on immediately
-2. Specific enough that subtasks can be generated without asking follow-up questions
-3. Conservative in assumptions (infer only what is reasonable)
+1. Immediately understandable without further clarification
+2. Rich enough to support structured breakdown (phases, actions, guidance)
+3. Conservative in assumptions, but explicit about scope and outcome
 
-INFERENCE GUIDELINES:
-- If the intent implies a deliverable (e.g. "prepare", "build", "write"), describe the expected outcome
-- If the intent implies multiple steps, reflect that in the description
-- If no time constraint is mentioned, set dueDate to null
-- If urgency words are present (e.g. today, asap, urgent), reflect that in priority
-- Prefer clarity over verbosity
+DATE & TIME INTERPRETATION RULES (CRITICAL):
+
+Use the following rules to infer dueDate ONLY when clearly implied:
+
+RELATIVE PHRASES:
+- "today" → dueDate = today's date
+- "tomorrow" → dueDate = today + 1 day
+- "day after tomorrow" → today + 2 days
+- "this week" → dueDate = upcoming Sunday of current week
+- "next week" → dueDate = next Monday
+- "this weekend" → upcoming Saturday
+- "next weekend" → Saturday of the following week
+- "tonight" → dueDate = today's date
+- "EOD" / "end of day" → dueDate = today's date
+- "by morning" → dueDate = today + 1 day
+
+EXPLICIT DAYS:
+- "on Monday" → nearest upcoming Monday (not past)
+- "this Monday" → Monday of the current week (if not passed)
+- "next Monday" → Monday of the following week
+
+DATES:
+- If the user specifies a calendar date, use it exactly.
+- Always output dueDate as an ISO 8601 date string (YYYY-MM-DD).
+
+AMBIGUITY RULE:
+- If the time reference is vague or debatable (e.g. "soon", "later", "sometime", "eventually"),
+  set dueDate to null.
+
+NO DEADLINE RULE:
+- If no time constraint is implied, dueDate MUST be null.
+
+INFERENCE GUIDELINES (ENHANCED):
+
+- If the intent implies a deliverable (e.g. "prepare", "build", "write", "design"):
+  - Describe the expected output
+  - Mention the level of completeness or readiness implied
+- If the intent implies multiple steps:
+  - Hint at the types of steps involved (planning, execution, review) without listing them
+- If stakeholders or an audience are implied (self, team, client, interviewer, user):
+  - Mention them briefly
+- If quality or correctness matters (e.g. submit, finalize, present):
+  - Reflect an implicit quality bar
+- Avoid implementation details unless clearly implied
+- Prefer clarity and usefulness over brevity, but keep it concise (2–4 sentences max)
 
 FIELD DEFINITIONS:
 - description:
-  A concise but complete explanation of what "done" looks like.
-  Mention the goal, scope, and any obvious constraints.
+  A concise but slightly expanded explanation of what "done" looks like.
+  It should clarify:
+  - the goal or outcome
+  - the scope of work
+  - any obvious constraints or expectations
 - priority:
   Choose based on urgency signals in the text.
   Use MEDIUM if unclear.
@@ -244,7 +347,7 @@ FIELD DEFINITIONS:
   ISO 8601 date string ONLY if a deadline is clearly implied.
   Otherwise null.
 - reasoning:
-  One short sentence explaining how priority and category were inferred.
+  One short sentence explaining how priority, category, and dueDate were inferred.
 
 OUTPUT SCHEMA (JSON ONLY):
 {

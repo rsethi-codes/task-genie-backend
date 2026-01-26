@@ -220,6 +220,24 @@ export class GroqAIProvider implements AIProvider {
     return this.wrap("RefinementAnalysis", data, model, pHash);
   }
 
+  async conductCheckIn(input: any, meta: AIRequestMeta): Promise<AIProviderResult<any>> {
+    const context = {
+      userName: input.userName,
+      energy: input.energy,
+      moods: input.moods,
+      reflection: input.reflection,
+      tasks: (input.tasks || []).map((t: any) => ({ title: t.title, priority: t.priority })),
+      history: input.history || undefined
+    };
+
+    const prompt = `FEATURE: CheckIn\n\nCONTEXT (JSON):\n${JSON.stringify(context)}\n\nReturn JSON only with schema:\n{\n  "requiresFollowUp": boolean,\n  "followUpQuestion": string | null,\n  "decision": {\n    "strategy": "rest" | "easy_win" | "focus" | "motivation",\n    "rationale": "string",\n    "suggestedNodeId": "string" | null,\n    "suggestedAction": "string",\n    "alternatives": [{ "label": "string", "nodeId": "string" | null, "action": "string" }]\n  } | null\n}`;
+
+    const { text, model, promptHash: pHash } = await this.completeJson(prompt, meta);
+    const data = requireJsonObject(text);
+    return this.wrap("CheckIn", data, model, pHash);
+  }
+
+
   static isRetryableError(error: any) {
     return isRetryableGroqError(error);
   }

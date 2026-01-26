@@ -111,7 +111,8 @@ export class TaskRepository {
                 events: {
                     take: 10,
                     orderBy: { createdAt: 'desc' }
-                }
+                },
+                complexity: true
             },
         });
     }

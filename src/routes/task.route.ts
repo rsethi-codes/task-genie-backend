@@ -10,6 +10,7 @@ const router = Router();
 
 router.post("/", authenticate as any, taskController.createTask);
 router.post("/enrich", authenticate as any, taskController.enrichTask);
+router.post("/classify", authenticate as any, taskController.classifyTask);
 router.get("/", authenticate as any, taskController.getTasks);
 router.get("/:id", authenticate as any, taskController.getTask);
 router.patch("/:id", authenticate as any, taskController.updateTask);

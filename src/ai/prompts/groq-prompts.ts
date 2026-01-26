@@ -1,4 +1,4 @@
-import { BreakTaskIntoSubtasksInput, TaskEnrichmentInput } from "../ai-provider";
+import { BreakTaskIntoSubtasksInput, TaskEnrichmentInput, TaskComplexityInput } from "../ai-provider";
 
 export const breakTaskIntoSubtasksPrompt = (
   input: BreakTaskIntoSubtasksInput,
@@ -358,3 +358,46 @@ OUTPUT SCHEMA (JSON ONLY):
   "reasoning": "string"
 }
 `;
+
+export const taskComplexityClassificationPrompt = (input: TaskComplexityInput) => {
+  return `
+SYSTEM ROLE:
+You are TaskGenie's Complexity Analysis Engine.
+Your job is to classify a task into one of four Complexity Levels to determine the appropriate coaching experience.
+
+COMPLEXITY LEVELS (MANDATORY):
+- "L0": Trivial / Operational
+  - One-off, no learning, no planning.
+  - Examples: "Buy bread", "Call mom", "Pay electricity bill", "Take out trash".
+- "L1": Structured but Finite
+  - Clear steps, limited scope, common procedures.
+  - Examples: "Prepare resume", "Book flight tickets", "Renew passport", "Wash the car".
+- "L2": Skill / Habit Building
+  - Requires learning, consistency, feedback loops, or lifestyle changes.
+  - Examples: "Learn React", "Get fit", "Improve communication", "Read 2 books a month".
+- "L3": Identity / Outcome Transforming
+  - Ambiguous, long-term, high uncertainty, multi-phase, life-changing.
+  - Examples: "Build a startup", "Become financially independent", "100k side hustle", "Move to a new country".
+
+TASK TITLE:
+"${input.title}"
+
+USER CONTEXT:
+${input.user ? `Persona Traits: ${JSON.stringify(input.user.personaSnapshot?.traits || {})}` : "No specific persona data."}
+${input.historicalPatterns && input.historicalPatterns.length > 0 ? `Past completion patterns: ${input.historicalPatterns.join(", ")}` : ""}
+
+RULES:
+- Return ONLY valid JSON.
+- Do NOT include markdown, commentary, or explanations.
+- Be objective and consistent.
+- confidenceScore should be between 0 and 1.
+- reasoning should be a concise 1-sentence explanation of why this level was chosen.
+
+OUTPUT SCHEMA:
+{
+  "level": "L0" | "L1" | "L2" | "L3",
+  "confidenceScore": number,
+  "reasoning": "string"
+}
+`;
+};

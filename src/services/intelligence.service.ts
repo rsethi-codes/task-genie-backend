@@ -249,6 +249,37 @@ export class IntelligenceService {
     }
 
     /**
+     * Classifies task complexity to decide on the coaching flow.
+     */
+    async classifyTaskComplexity(userId: string, title: string): Promise<any> {
+        const user = await userRepository.findWithPersona(userId);
+        const patterns = (user as any)?.behaviorPatterns?.map((p: any) => p.patternType) || [];
+
+        try {
+            const { result: providerResult } = await runWithAIFallback(
+                { feature: "TaskComplexityClassification", userId },
+                (provider) => provider.classifyTaskComplexity(
+                    { user, title, historicalPatterns: patterns },
+                    { feature: "TaskComplexityClassification", userId }
+                )
+            );
+
+            return {
+                ...providerResult.data,
+                aiMetadata: {
+                    aiMode: providerResult.aiMode,
+                    provider: providerResult.provider,
+                    feature: providerResult.feature,
+                    promptHash: providerResult.promptHash,
+                }
+            };
+        } catch (error: any) {
+            console.error("Complexity Classification Error:", error);
+            throw new Error(`Failed to classify task complexity: ${error.message}`);
+        }
+    }
+
+    /**
      * Enriches a task intent string into a full task object.
      */
     async enrichTaskIntent(userId: string, title: string): Promise<any> {

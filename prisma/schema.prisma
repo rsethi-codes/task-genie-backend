@@ -133,6 +133,13 @@ enum DayOfWeek {
   sunday
 }
 
+enum ComplexityLevel {
+  L0 // Trivial / Operational
+  L1 // Structured but Finite
+  L2 // Skill / Habit Building
+  L3 // Identity / Outcome Transforming
+}
+
 // ============================================================================
 // CORE USER & PROFILE
 // ============================================================================
@@ -382,6 +389,7 @@ model TaskNode {
   patternFromNode     TaskPattern[]       @relation("PatternFromNode")
   basedOnPattern      TaskPattern?        @relation("NodeFromPattern")
   basedOnPatternId    String?             @db.Uuid
+  complexity          TaskComplexity?
 
   @@unique([userId, idempotencyKey])
   @@index([userId, nodeType])
@@ -907,4 +915,14 @@ model RefinementMessage {
   createdAt DateTime @default(now())
 
   session RefinementSession @relation(fields: [sessionId], references: [id])
+}
+model TaskComplexity {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nodeId          String          @unique @db.Uuid
+  level           ComplexityLevel
+  confidenceScore Float
+  reasoning       String
+  decidedAt       DateTime        @default(now())
+
+  node TaskNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 }

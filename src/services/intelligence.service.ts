@@ -1,6 +1,7 @@
 import { runWithAIFallback } from "../ai/get-ai-provider.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { taskRepository } from "../repositories/task.repository.js";
+import { aiRepository } from "../repositories/ai.repository.js";
 import { prisma } from "../config/db.js";
 import { TaskNode, NodeType, TemporalIntent, NodeStatus, BehaviorPattern } from "@prisma/client";
 import { NodeSuggestion } from "../ai/ai-provider.js";
@@ -40,9 +41,26 @@ export class IntelligenceService {
         }
 
         try {
+            // Fetch questionnaire context if it was completed
+            const questionnaireSession = await (prisma as any).questionSession.findFirst({
+                where: { nodeId: taskId, userId, status: 'completed' },
+                include: { responses: true }
+            });
+
+            const questionnaireData = questionnaireSession ? {
+                questions: questionnaireSession.questions,
+                answers: questionnaireSession.responses.map((r: any) => ({
+                    question: r.questionText,
+                    answer: r.answerText
+                }))
+            } : undefined;
+
             const { result: providerResult } = await runWithAIFallback(
                 { feature: "NodeGeneration", userId },
-                (provider) => provider.generateNodes({ user, task }, { feature: "NodeGeneration", userId })
+                (provider) => provider.generateNodes(
+                    { user, task, questionnaire: questionnaireData },
+                    { feature: "NodeGeneration", userId }
+                )
             );
 
             const aiProposedNodes = providerResult.data;
@@ -460,6 +478,95 @@ export class IntelligenceService {
                 }
             });
         }
+    }
+
+    async getAdaptiveQuestionnaire(userId: string, taskId: string): Promise<any> {
+        const task = await taskRepository.findById(taskId, userId);
+        if (!task) throw new Error("Task not found");
+
+        let complexity = task.complexity;
+        if (!complexity) {
+            const classification = await this.classifyTaskComplexity(userId, task.title);
+            complexity = await (prisma as any).taskComplexity.create({
+                data: {
+                    nodeId: taskId,
+                    level: classification.level,
+                    confidenceScore: classification.confidenceScore,
+                    reasoning: classification.reasoning
+                }
+            }) as any;
+        }
+
+        if (complexity!.level !== 'L2' && complexity!.level !== 'L3') {
+            return { required: false, reason: "Task complexity is low" };
+        }
+
+        let session = await aiRepository.findSessionByNode(taskId, userId);
+        if (!session) {
+            const user = await userRepository.findById(userId);
+            const { result: questionnaireResult } = await runWithAIFallback(
+                { feature: "AdaptiveQuestionnaire", userId },
+                (provider) => provider.generateAdaptiveQuestionnaire(
+                    { task: { title: task.title, description: task.description }, user },
+                    { feature: "AdaptiveQuestionnaire", userId }
+                )
+            );
+
+            session = await aiRepository.createSession({
+                userId,
+                nodeId: taskId,
+                status: 'open',
+                totalQuestions: questionnaireResult.data.questions.length,
+                questions: questionnaireResult.data.questions as any,
+                ambiguityScore: questionnaireResult.data.ambiguityScore
+            });
+        }
+
+        return {
+            required: true,
+            sessionId: session.id,
+            questions: session.questions,
+            answeredCount: session.answeredQuestions,
+            totalCount: session.totalQuestions,
+            ambiguityScore: session.ambiguityScore
+        };
+    }
+
+    async submitQuestionnaireAnswer(userId: string, sessionId: string, questionId: string, answer: any, metrics: any = {}) {
+        const session = await aiRepository.getSession(sessionId);
+        if (!session || session.userId !== userId) throw new Error("Session not found");
+
+        const questions = session.questions as any[];
+        const question = questions.find(q => q.id === questionId);
+        if (!question) throw new Error("Question not found");
+
+        await aiRepository.createResponse({
+            sessionId,
+            userId,
+            questionId: null,
+            questionText: question.text,
+            questionType: question.type as any,
+            answer,
+            answerText: Array.isArray(answer) ? answer.join(", ") : String(answer),
+            responseTime: metrics.responseTime || 0,
+            answeredAt: new Date(),
+            order: session.answeredQuestions + 1
+        });
+
+        const updatedSession = await aiRepository.getSession(sessionId);
+        if (updatedSession!.answeredQuestions >= updatedSession!.totalQuestions) {
+            await aiRepository.updateSession(sessionId, {
+                status: 'completed',
+                completedAt: new Date()
+            });
+
+            // Trigger node generation after completion
+            this.generateNodes(userId, session.nodeId!).catch(err => {
+                console.error("Delayed node generation failed", err);
+            });
+        }
+
+        return updatedSession;
     }
 }
 

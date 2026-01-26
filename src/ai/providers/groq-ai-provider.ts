@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { AI_MODE } from "../../config/ai-config.js";
 import { promptHash, requireJsonArray, requireJsonObject } from "../utils/ai-json.js";
-import type {
+import {
   AIProvider,
   AIProviderResult,
   AIRequestMeta,
@@ -24,6 +24,8 @@ import type {
   TaskEnrichmentOutput,
   RefinementAnalysisOutput,
   TaskComplexityOutput,
+  AdaptiveQuestionnaireInput,
+  AdaptiveQuestionnaireOutput,
 } from "../ai-provider.js";
 import { breakTaskIntoSubtasksPrompt, expandNodePrompt, taskEnrichmentPrompt } from "../prompts/groq-prompts.js";
 import { logger } from "../../lib/logger.js";
@@ -251,6 +253,41 @@ export class GroqAIProvider implements AIProvider {
     const { text, model, promptHash: pHash } = await this.completeJson(prompt, meta);
     const data = requireJsonObject(text);
     return this.wrap("CheckIn", data, model, pHash);
+  }
+
+  async generateAdaptiveQuestionnaire(
+    input: AdaptiveQuestionnaireInput,
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<AdaptiveQuestionnaireOutput>> {
+    const prompt = `FEATURE: AdaptiveQuestionnaire
+TASK: "${input.task.title}"
+DESCRIPTION: "${input.task.description || "N/A"}"
+
+RULES:
+1. Max 5 questions.
+2. Task-specific (domain decomposition).
+3. NO "Beginner/Advanced" labels.
+4. Dimensions to cover in 4 MCQ/Multi-select: capability, end_state, time_reality, timeline_pressure.
+5. 5th question is optional, type "text", dimension "ambiguity".
+
+Return JSON with schema:
+{
+  "questions": [
+    {
+      "id": string,
+      "text": string,
+      "type": "single_choice" | "multiple_choice" | "text",
+      "options": [{"value": string, "label": string}],
+      "dimension": "capability" | "end_state" | "time_reality" | "timeline_pressure" | "ambiguity",
+      "mandatory": boolean
+    }
+  ],
+  "ambiguityScore": number
+}`;
+
+    const { text, model, promptHash: pHash } = await this.completeJson(prompt, meta);
+    const data = requireJsonObject(text) as AdaptiveQuestionnaireOutput;
+    return this.wrap("AdaptiveQuestionnaire", data, model, pHash);
   }
 
 

@@ -176,6 +176,31 @@ export class TaskController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  async getQuestionnaire(req: AuthenticatedRequest, res: Response) {
+    try {
+      const data = await intelligenceService.getAdaptiveQuestionnaire(req.user!.id, req.params.id);
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async submitAnswer(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { questionId, answer, metrics } = req.body;
+      const data = await intelligenceService.submitQuestionnaireAnswer(
+        req.user!.id,
+        req.params.sessionId,
+        questionId,
+        answer,
+        metrics
+      );
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
 
 export const taskController = new TaskController();

@@ -1,6 +1,6 @@
 import { AI_MODE } from "../../config/ai-config.js";
 import type { EnergyLevel, Priority } from "@prisma/client";
-import type {
+import {
   AIProvider,
   AIProviderResult,
   AIRequestMeta,
@@ -12,12 +12,18 @@ import type {
   RefinementAnalysisInput,
   TaskEnrichmentInput,
   SubtaskSuggestion,
+  NodeSuggestion,
   PersonaAnalysisOutput,
   ExecutionGuidanceOutput,
   JournalAssistOutput,
   ReflectionSummaryOutput,
   TaskEnrichmentOutput,
   RefinementAnalysisOutput,
+  ComplexityLevel,
+  AdaptiveQuestionnaireInput,
+  AdaptiveQuestionnaireOutput,
+  TaskComplexityOutput,
+  TaskComplexityInput,
 } from "../ai-provider.js";
 
 function stableHash(input: string): string {
@@ -348,5 +354,94 @@ export class TestAIProvider implements AIProvider {
     };
 
     return this.withMeta("CheckIn", decision, `${meta.feature}:checkin`);
+  }
+
+  async classifyTaskComplexity(
+    input: TaskComplexityInput,
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<TaskComplexityOutput>> {
+    const title = normalizeText(input.title).toLowerCase();
+    let level = ComplexityLevel.L1;
+    let reasoning = "Determined based on keyword matching.";
+
+    if (title.includes("learn") || title.includes("start") || title.includes("build")) {
+      level = ComplexityLevel.L2;
+    } else if (title.includes("become") || title.includes("engineer") || title.includes("transform")) {
+      level = ComplexityLevel.L3;
+    } else if (title.split(" ").length <= 2) {
+      level = ComplexityLevel.L0;
+    }
+
+    const data: TaskComplexityOutput = {
+      level,
+      confidenceScore: 0.8,
+      reasoning,
+    };
+
+    return this.withMeta("TaskComplexityClassification", data, `${meta.feature}:${title}`);
+  }
+
+  async generateAdaptiveQuestionnaire(
+    input: AdaptiveQuestionnaireInput,
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<AdaptiveQuestionnaireOutput>> {
+    const title = normalizeText(input.task?.title).toLowerCase();
+    const questions = [
+      {
+        id: "q_cap",
+        text: `What is your current experience with ${title}?`,
+        type: "single_choice" as const,
+        options: [
+          { value: "none", label: "No experience" },
+          { value: "some", label: "Some exposure" },
+          { value: "proficient", label: "Used it before" },
+        ],
+        dimension: "capability" as const,
+        mandatory: true,
+      },
+      {
+        id: "q_end",
+        text: "What is your primary goal with this task?",
+        type: "single_choice" as const,
+        options: [
+          { value: "personal", label: "Personal interest" },
+          { value: "work", label: "Work requirement" },
+          { value: "mastery", label: "Full mastery" },
+        ],
+        dimension: "end_state" as const,
+        mandatory: true,
+      },
+      {
+        id: "q_time",
+        text: "How much time can you commit weekly?",
+        type: "single_choice" as const,
+        options: [
+          { value: "low", label: "1-2 hours" },
+          { value: "medium", label: "5-10 hours" },
+          { value: "high", label: "10+ hours" },
+        ],
+        dimension: "time_reality" as const,
+        mandatory: true,
+      },
+      {
+        id: "q_press",
+        text: "What is your target deadline?",
+        type: "single_choice" as const,
+        options: [
+          { value: "none", label: "No rush" },
+          { value: "soft", label: "Next few weeks" },
+          { value: "hard", label: "ASAP" },
+        ],
+        dimension: "timeline_pressure" as const,
+        mandatory: true,
+      },
+    ];
+
+    const data: AdaptiveQuestionnaireOutput = {
+      questions,
+      ambiguityScore: 0.5,
+    };
+
+    return this.withMeta("AdaptiveQuestionnaire", data, `${meta.feature}:${title}`);
   }
 }

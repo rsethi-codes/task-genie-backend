@@ -23,6 +23,10 @@ router.post("/:id/refine", authenticate as any, taskController.refineTask);
 router.post("/reorder", authenticate as any, taskController.reorderTasks);
 router.get("/coach/today", authenticate as any, taskController.getTodaysFocus);
 
+// Questionnaire
+router.get("/:id/questionnaire", authenticate as any, taskController.getQuestionnaire);
+router.post("/:id/questionnaire/:sessionId/answer", authenticate as any, taskController.submitAnswer);
+
 // AI
 router.post("/:taskId/ai/start-session", authenticate as any, aiController.startSession);
 

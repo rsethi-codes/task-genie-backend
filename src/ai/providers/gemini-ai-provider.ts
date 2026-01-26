@@ -1,6 +1,6 @@
 import { geminiModel } from "../../config/gemini.js";
 import { AI_MODE } from "../../config/ai-config.js";
-import type {
+import {
   AIProvider,
   AIProviderResult,
   AIRequestMeta,
@@ -21,6 +21,10 @@ import type {
   ReflectionSummaryOutput,
   TaskEnrichmentOutput,
   RefinementAnalysisOutput,
+  ComplexityLevel,
+  AdaptiveQuestionnaireInput,
+  AdaptiveQuestionnaireOutput,
+  TaskComplexityOutput,
 } from "../ai-provider.js";
 
 function stableHash(input: string): string {
@@ -112,6 +116,15 @@ GOAL: Break down the task into subtasks.
     }
 
     const task = input.task as any;
+
+    let questionnaireContext = "";
+    if (input.questionnaire && input.questionnaire.answers) {
+      questionnaireContext = `
+USER'S ADDITIONAL GOAL CONTEXT (from questionnaire):
+${input.questionnaire.answers.map((a: any) => `- ${a.question}: ${a.answer}`).join("\n")}
+`;
+    }
+
     const prompt = `
 You are TaskGenie, an AI-powered execution coach.
 
@@ -119,6 +132,7 @@ GOAL: Break down a long-term goal (ROOT) into a structural program.
 
 USER PERSONA:
 ${personaContext}
+${questionnaireContext}
 
 ROOT TASK:
 Title: ${task.title}
@@ -407,5 +421,93 @@ Return JSON ONLY:
     const data = JSON.parse(jsonStr);
 
     return this.withMeta("CheckIn", data, prompt);
+  }
+
+  async classifyTaskComplexity(
+    input: { title: string; user?: any; historicalPatterns?: any[] },
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<TaskComplexityOutput>> {
+    const prompt = `
+You are a task complexity classifier for TaskGenie.
+Classify the following task into one of these levels:
+L0: Trivial / Operational (e.g., "Buy milk", "Reply to email")
+L1: Structured but Finite (e.g., "Plan weekend trip", "Prepare presentation")
+L2: Skill / Habit Building (e.g., "Learn React", "Start running")
+L3: Identity / Outcome Transforming (e.g., "Become a software engineer", "Write a book")
+
+Task: "${input.title}"
+User Context: ${input.historicalPatterns ? `Historical Patterns: ${input.historicalPatterns.join(", ")}` : "None"}
+
+Return JSON only:
+{
+  "level": "L0" | "L1" | "L2" | "L3",
+  "confidenceScore": number (0-1),
+  "reasoning": "string"
+}
+`;
+
+    const result = await geminiModel.generateContent(prompt);
+    const text = result.response.text();
+    const jsonStr = extractFirstJsonObject(text);
+    const data = JSON.parse(jsonStr) as TaskComplexityOutput;
+
+    return this.withMeta("TaskComplexityClassification", data, prompt);
+  }
+
+  async generateAdaptiveQuestionnaire(
+    input: AdaptiveQuestionnaireInput,
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<AdaptiveQuestionnaireOutput>> {
+    let personaContext = "The user is a general user.";
+    const userAny = input.user as any;
+    if (userAny?.personaSnapshots && userAny.personaSnapshots.length > 0) {
+      const snap = userAny.personaSnapshots[0];
+      personaContext = `User Traits: ${JSON.stringify(snap.traits)}.`;
+    }
+
+    const prompt = `
+You are TaskGenie's Adaptive Questionnaire Engine.
+Your goal is to reduce ambiguity for a high-complexity task (L2/L3).
+
+TASK: "${input.task.title}"
+DESCRIPTION: "${input.task.description || "No description provided"}"
+
+USER CONTEXT:
+${personaContext}
+
+RULES:
+1. Max 5 questions.
+2. Questions must be task-specific (domain decomposition). e.g. "Learn React" -> JSX, Hooks, etc.
+3. NO subjective labels like "Beginner" or "Advanced".
+4. First 4 MUST be MCQ / Multi-select covering these exact dimensions:
+   - capability: Current objective capability/knowledge level (topic-based)
+   - end_state: What they want to be able to DO (output-based)
+   - time_reality: Weekly commitment / consistency
+   - timeline_pressure: Soft vs hard deadlines
+5. 5th question is optional, type "text", ONLY if significant ambiguity remains. Dimension: "ambiguity".
+6. Each question must reduce ambiguity and feed directly into planning.
+
+OUTPUT format: JSON only.
+{
+  "questions": [
+    {
+      "id": "q1",
+      "text": "...",
+      "type": "single_choice" | "multiple_choice" | "text",
+      "options": [{"value": "...", "label": "..."}],
+      "dimension": "capability" | "end_state" | "time_reality" | "timeline_pressure" | "ambiguity",
+      "mandatory": true
+    }
+  ],
+  "ambiguityScore": number (0-1, higher means more ambiguity)
+}
+`;
+
+    const result = await geminiModel.generateContent(prompt);
+    const text = result.response.text();
+    const jsonStr = extractFirstJsonObject(text);
+    const data = JSON.parse(jsonStr);
+
+    return this.withMeta("AdaptiveQuestionnaire", data, prompt);
   }
 }

@@ -43,7 +43,8 @@ export type AIFeature =
   | "TaskEnrichment"
   | "RefinementAnalysis"
   | "CheckIn"
-  | "TaskComplexityClassification";
+  | "TaskComplexityClassification"
+  | "AdaptiveQuestionnaire";
 
 export type AIProviderName = "TestAIProvider" | "GeminiAIProvider" | "Groq";
 
@@ -85,6 +86,7 @@ export interface BreakTaskIntoSubtasksInput {
 export interface NodeGenerationInput {
   user: any;
   task: any;
+  questionnaire?: any;
 }
 
 export interface NodeSuggestion {
@@ -253,4 +255,33 @@ export interface AIProvider {
     input: TaskComplexityInput,
     meta: AIRequestMeta
   ): Promise<AIProviderResult<TaskComplexityOutput>>;
+
+  generateAdaptiveQuestionnaire(
+    input: AdaptiveQuestionnaireInput,
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<AdaptiveQuestionnaireOutput>>;
+}
+
+export interface AdaptiveQuestionnaireInput {
+  task: { title: string; description: string | null };
+  user: any;
+}
+
+export interface QuestionOption {
+  value: string;
+  label: string;
+}
+
+export interface Question {
+  id: string;
+  text: string;
+  type: "single_choice" | "multiple_choice" | "text";
+  options?: QuestionOption[];
+  dimension: "capability" | "end_state" | "time_reality" | "timeline_pressure" | "ambiguity";
+  mandatory: boolean;
+}
+
+export interface AdaptiveQuestionnaireOutput {
+  questions: Question[];
+  ambiguityScore: number; // 0-1
 }

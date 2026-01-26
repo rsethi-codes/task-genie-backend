@@ -24,6 +24,13 @@ export class AIRepository {
         });
     }
 
+    async findSessionByNode(nodeId: string, userId: string): Promise<QuestionSession | null> {
+        return prisma.questionSession.findFirst({
+            where: { nodeId, userId, status: 'open' },
+            include: { responses: { orderBy: { order: 'asc' } } }
+        });
+    }
+
     async createResponse(data: Prisma.QuestionResponseUncheckedCreateInput): Promise<QuestionResponse> {
         return prisma.$transaction(async (tx) => {
             const resp = await tx.questionResponse.create({ data });
@@ -33,7 +40,6 @@ export class AIRepository {
                 where: { id: data.sessionId },
                 data: {
                     answeredQuestions: { increment: 1 },
-                    totalQuestions: { increment: 1 },
                 }
             });
 

@@ -502,8 +502,10 @@ model QuestionSession {
   revisedAnswers    Int @default(0)
   
   // AI decision
+  questions         Json?         // Generated questions
   decision          Json?         // Final AI plan
   decisionConfidence Float?
+  ambiguityScore    Float?        // 0-1
   
   // Onboarding specific
   exitReason        String?       // "completed", "skip", "timeout", "irrelevant"

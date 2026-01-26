@@ -3,6 +3,7 @@ import { taskEventRepository, TaskEventType, EventSource } from "../repositories
 import { CreateTaskInput, UpdateTaskInput } from "../schemas/task.schema.js";
 import { TaskNode, NodeStatus, NodeType } from "@prisma/client";
 import { taskGenerationQueue } from "../config/queue.js";
+import { prisma } from "../config/db.js";
 
 const ALLOWED_TRANSITIONS: Record<NodeStatus, NodeStatus[]> = {
   [NodeStatus.DRAFT]: [NodeStatus.ACTIVE, NodeStatus.ARCHIVED],
@@ -22,7 +23,17 @@ export class TaskService {
       userId,
       nodeType,
       aiMetadata: data.aiMetadata as any,
+      complexity: undefined, // Don't pass complexity to taskRepository.create
     } as any);
+
+    if (data.complexity) {
+      await (prisma as any).taskComplexity.create({
+        data: {
+          nodeId: node.id,
+          ...data.complexity
+        }
+      });
+    }
 
     await taskEventRepository.create({
       nodeId: node.id,

@@ -162,6 +162,20 @@ export class TaskController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  async classifyTask(req: AuthenticatedRequest, res: Response) {
+    const correlationId = (req as any).correlationId;
+    try {
+      const { title } = req.body;
+      if (!title) return res.status(400).json({ error: "Title is required" });
+
+      const classification = await intelligenceService.classifyTaskComplexity(req.user!.id, title);
+      res.json(classification);
+    } catch (error: any) {
+      logger.error("Failed to classify task", { correlationId, error: error.message, userId: req.user?.id });
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
 
 export const taskController = new TaskController();

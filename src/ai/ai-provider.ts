@@ -24,6 +24,13 @@ export enum NodeStatus {
   ARCHIVED = "ARCHIVED"
 }
 
+export enum ComplexityLevel {
+  L0 = "L0",
+  L1 = "L1",
+  L2 = "L2",
+  L3 = "L3"
+}
+
 export type AIFeature =
   | "PersonaAnalysis"
   | "NodeGeneration"
@@ -35,7 +42,8 @@ export type AIFeature =
   | "TaskEnrichment"
   | "TaskEnrichment"
   | "RefinementAnalysis"
-  | "CheckIn";
+  | "CheckIn"
+  | "TaskComplexityClassification";
 
 export type AIProviderName = "TestAIProvider" | "GeminiAIProvider" | "Groq";
 
@@ -187,6 +195,18 @@ export interface CheckInOutput {
   } | null;
 }
 
+export interface TaskComplexityInput {
+  title: string;
+  user?: any;
+  historicalPatterns?: any[];
+}
+
+export interface TaskComplexityOutput {
+  level: ComplexityLevel;
+  confidenceScore: number;
+  reasoning: string;
+}
+
 export interface AIProvider {
   generatePersona(input: PersonaAnalysisInput, meta: AIRequestMeta): Promise<AIProviderResult<PersonaAnalysisOutput>>;
 
@@ -228,4 +248,9 @@ export interface AIProvider {
     input: CheckInInput,
     meta: AIRequestMeta
   ): Promise<AIProviderResult<CheckInOutput>>;
+
+  classifyTaskComplexity(
+    input: TaskComplexityInput,
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<TaskComplexityOutput>>;
 }

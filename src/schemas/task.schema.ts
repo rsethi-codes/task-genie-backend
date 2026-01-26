@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NodeStatus, Priority, NodeType, TemporalIntent, EnergyLevel, FocusLevel, TimeOfDay } from "@prisma/client";
+import { NodeStatus, Priority, NodeType, TemporalIntent, EnergyLevel, FocusLevel, TimeOfDay, ComplexityLevel } from "@prisma/client";
 
 export const createTaskSchema = z.object({
     title: z.string().min(1).max(255),
@@ -26,6 +26,11 @@ export const createTaskSchema = z.object({
     parentId: z.string().uuid().optional().nullable(),
     rootTaskId: z.string().uuid().optional(),
     idempotencyKey: z.string().uuid().optional(),
+    complexity: z.object({
+        level: z.nativeEnum(ComplexityLevel),
+        confidenceScore: z.number().min(0).max(1),
+        reasoning: z.string(),
+    }).optional(),
 });
 
 export const updateTaskSchema = createTaskSchema.partial();

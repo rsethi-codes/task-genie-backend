@@ -14,6 +14,7 @@ import type {
   ReflectionSummaryInput,
   TaskEnrichmentInput,
   RefinementAnalysisInput,
+  TaskComplexityInput,
   SubtaskSuggestion,
   NodeSuggestion,
   PersonaAnalysisOutput,
@@ -22,6 +23,7 @@ import type {
   ReflectionSummaryOutput,
   TaskEnrichmentOutput,
   RefinementAnalysisOutput,
+  TaskComplexityOutput,
 } from "../ai-provider.js";
 import { breakTaskIntoSubtasksPrompt, expandNodePrompt, taskEnrichmentPrompt } from "../prompts/groq-prompts.js";
 import { logger } from "../../lib/logger.js";
@@ -218,6 +220,20 @@ export class GroqAIProvider implements AIProvider {
     const { text, model, promptHash: pHash } = await this.completeJson(prompt, meta);
     const data = requireJsonObject(text) as RefinementAnalysisOutput;
     return this.wrap("RefinementAnalysis", data, model, pHash);
+  }
+
+  async classifyTaskComplexity(
+    input: TaskComplexityInput,
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<TaskComplexityOutput>> {
+    const { taskComplexityClassificationPrompt } = await import("../prompts/groq-prompts.js");
+    const prompt = taskComplexityClassificationPrompt(input);
+
+    logger.info("GroqAIProvider:classifyTaskComplexity", { title: input.title });
+
+    const { text, model, promptHash: pHash } = await this.completeJson(prompt, meta);
+    const data = requireJsonObject(text) as TaskComplexityOutput;
+    return this.wrap("TaskComplexityClassification", data, model, pHash);
   }
 
   async conductCheckIn(input: any, meta: AIRequestMeta): Promise<AIProviderResult<any>> {

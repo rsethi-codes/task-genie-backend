@@ -140,3 +140,8 @@ vite.config.ts.timestamp-*
 
 # FUTURE IMPROVEMENTS
 future-improvements.md
+prisma/seed.ts
+LOGGING_CONFIGURATION.md
+README-INTELLIGENCE.md
+README-SUBTASK-FLOW.md
+README.md

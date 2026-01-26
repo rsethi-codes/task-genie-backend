@@ -12,7 +12,7 @@ export class AIService {
 
         const session = await aiRepository.createSession({
             userId,
-            taskId,
+            nodeId: taskId,
             ...data,
         });
 
@@ -21,7 +21,7 @@ export class AIService {
             entityId: session.id,
             action: "started",
             performedBy: userId,
-            meta: { taskId } as any
+            meta: { nodeId: taskId } as any
         });
 
         return session;
@@ -56,8 +56,8 @@ export class AIService {
         });
 
         // If there's a node associated, update it with AI metadata
-        if (session.taskId) {
-            await taskRepository.update(session.taskId, userId, {
+        if (session.nodeId) {
+            await taskRepository.update(session.nodeId, userId, {
                 aiMetadata: data.decision as any,
             } as any);
 
@@ -67,8 +67,8 @@ export class AIService {
                     const sub = data.subtasks[i];
                     await taskRepository.create({
                         ...sub,
-                        parentId: session.taskId,
-                        rootTaskId: session.taskId, // Assuming single nesting for now
+                        parentId: session.nodeId,
+                        rootTaskId: session.nodeId, // Assuming single nesting for now
                         userId,
                         aiGenerated: true,
                         order: i,
@@ -91,7 +91,7 @@ export class AIService {
             entityId: sessionId,
             action: "completed",
             performedBy: userId,
-            meta: { taskId: session.taskId } as any
+            meta: { nodeId: session.nodeId } as any
         });
 
         return updatedSession;

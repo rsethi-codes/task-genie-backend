@@ -3,7 +3,7 @@ import type { EnergyLevel, Priority } from "@prisma/client";
 // Temporary enum definitions until Prisma client is regenerated
 export enum NodeType {
   ROOT = "ROOT",
-  PHASE = "PHASE", 
+  PHASE = "PHASE",
   DAILY = "DAILY",
   ACTION = "ACTION",
   GUIDANCE = "GUIDANCE"
@@ -11,7 +11,7 @@ export enum NodeType {
 
 export enum TemporalIntent {
   today = "today",
-  daily = "daily", 
+  daily = "daily",
   phase = "phase",
   anytime = "anytime"
 }
@@ -19,7 +19,7 @@ export enum TemporalIntent {
 export enum NodeStatus {
   DRAFT = "DRAFT",
   ACTIVE = "ACTIVE",
-  BLOCKED = "BLOCKED", 
+  BLOCKED = "BLOCKED",
   COMPLETED = "COMPLETED",
   ARCHIVED = "ARCHIVED"
 }
@@ -33,7 +33,9 @@ export type AIFeature =
   | "Journaling"
   | "Reflection"
   | "TaskEnrichment"
-  | "RefinementAnalysis";
+  | "TaskEnrichment"
+  | "RefinementAnalysis"
+  | "CheckIn";
 
 export type AIProviderName = "TestAIProvider" | "GeminiAIProvider" | "Groq";
 
@@ -58,11 +60,11 @@ export interface PersonaAnalysisInput {
 
 export interface PersonaAnalysisOutput {
   persona:
-    | "Planner"
-    | "Procrastinator"
-    | "Overachiever"
-    | "Anxious Starter"
-    | "General";
+  | "Planner"
+  | "Procrastinator"
+  | "Overachiever"
+  | "Anxious Starter"
+  | "General";
   confidence: number;
   traits: Record<string, unknown>;
 }
@@ -163,6 +165,28 @@ export interface ReflectionSummaryOutput {
   suggestedNextSteps: string[];
 }
 
+export interface CheckInInput {
+  userName: string;
+  energy: number;
+  moods: string[];
+  reflection: string | null;
+  tasks: any[];
+  timeOfDay: string;
+  history?: string; // For follow-ups
+}
+
+export interface CheckInOutput {
+  requiresFollowUp: boolean;
+  followUpQuestion: string | null;
+  decision: {
+    strategy: "rest" | "easy_win" | "focus" | "motivation";
+    rationale: string;
+    suggestedNodeId: string | null;
+    suggestedAction: string;
+    alternatives: Array<{ label: string; nodeId: string | null; action: string }>;
+  } | null;
+}
+
 export interface AIProvider {
   generatePersona(input: PersonaAnalysisInput, meta: AIRequestMeta): Promise<AIProviderResult<PersonaAnalysisOutput>>;
 
@@ -199,4 +223,9 @@ export interface AIProvider {
     input: RefinementAnalysisInput,
     meta: AIRequestMeta
   ): Promise<AIProviderResult<RefinementAnalysisOutput>>;
+
+  conductCheckIn(
+    input: CheckInInput,
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<CheckInOutput>>;
 }

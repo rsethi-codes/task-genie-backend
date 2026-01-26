@@ -15,6 +15,7 @@ import { commentRoutes } from "./routes/comment.route.js";
 import { searchRoutes } from "./routes/search.route.js";
 import { auditLogRoutes } from "./routes/audit-log.route.js";
 import { onboardingRoutes } from "./routes/onboarding.route.js";
+import checkInRoutes from "./routes/check-in.route.js";
 import { USER_BASE, TASK_BASE, BASE } from "./constants/routes.constants.js";
 import { logger } from "./lib/logger.js";
 
@@ -52,6 +53,8 @@ app.use(`${BASE}/comments`, commentRoutes);
 app.use(`${BASE}/search`, searchRoutes);
 app.use(`${BASE}/audit-logs`, auditLogRoutes);
 app.use(`${BASE}/onboarding`, onboardingRoutes);
+
+app.use(`${BASE}/check-in`, checkInRoutes);
 
 // 404 handler
 app.use((req, res) => {

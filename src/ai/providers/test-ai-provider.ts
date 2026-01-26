@@ -316,4 +316,37 @@ export class TestAIProvider implements AIProvider {
 
     return this.withMeta("NodeExpansion", mockChildren, `${meta.feature}:${nodeTitle}`);
   }
+
+  async conductCheckIn(input: any, meta: AIRequestMeta): Promise<AIProviderResult<any>> {
+    const energy = input.energy || 3;
+    const mood = (input.moods || []).join(", ");
+
+    let strategy = "focus";
+    let rationale = "You seem ready to go.";
+    let action = "Pick a task.";
+
+    if (energy <= 2 || mood.includes("tired") || mood.includes("overwhelmed")) {
+      strategy = "rest";
+      rationale = "Your energy is low. It's okay to take a break.";
+      action = "Take a 15 min nap.";
+    } else if (energy === 3) {
+      strategy = "easy_win";
+      rationale = "Let's build some momentum.";
+      action = "Do a quick task.";
+    }
+
+    const decision = {
+      decision: {
+        strategy,
+        rationale,
+        suggestedNodeId: null,
+        suggestedAction: action,
+        alternatives: []
+      },
+      requiresFollowUp: false,
+      followUpQuestion: null
+    };
+
+    return this.withMeta("CheckIn", decision, `${meta.feature}:checkin`);
+  }
 }

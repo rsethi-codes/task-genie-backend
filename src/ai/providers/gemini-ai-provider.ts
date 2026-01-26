@@ -355,4 +355,57 @@ OUTPUT FORMAT (JSON ONLY):
 
     return this.withMeta("RefinementAnalysis", data, prompt);
   }
+
+
+  async conductCheckIn(
+    input: any,
+    meta: AIRequestMeta
+  ): Promise<AIProviderResult<any>> {
+    // Import dynamically or duplication to avoid circular deps if any, 
+    // but assuming CheckInInput matches content expected by prompt builder.
+    // We'll define the prompt here to keep it self-contained in the provider logic 
+    // OR import common prompts. For now, inline is safest for this tool call.
+
+    const prompt = `
+You are a calm, supportive, and intelligent task coach.
+Your goal is to help the user check in and decide what to do next.
+
+User Context:
+Name: ${input.userName}
+Time: ${input.timeOfDay}
+Energy: ${input.energy}/5
+Moods: ${(input.moods || []).join(", ")}
+Reflection: "${input.reflection || "None"}"
+History: "${input.history || "None"}"
+
+Pending Tasks:
+${(input.tasks || []).map((t: any) => `- [${t.status}] ${t.title} ((Priority: ${t.priority})`).join("\n")}
+
+You must choose ONE strategy:
+1. Rest / Reset (Energy very low)
+2. Easy Win (Low-medium energy)
+3. Focused Work (Medium-high energy)
+4. Motivation Boost (Blocked/Anxious)
+
+Return JSON ONLY:
+{
+  "requiresFollowUp": boolean,
+  "followUpQuestion": string | null,
+  "decision": {
+    "strategy": "rest" | "easy_win" | "focus" | "motivation",
+    "rationale": "string",
+    "suggestedNodeId": "uuid" | null,
+    "suggestedAction": "string",
+    "alternatives": [ { "label": "string", "nodeId": "uuid" | null, "action": "string" } ]
+  } | null
+}
+`;
+
+    const result = await geminiModel.generateContent(prompt);
+    const text = result.response.text();
+    const jsonStr = extractFirstJsonObject(text);
+    const data = JSON.parse(jsonStr);
+
+    return this.withMeta("CheckIn", data, prompt);
+  }
 }
